@@ -1,0 +1,35 @@
+{
+  "name": "@shidev/signals",
+  "version": "0.1.0",
+  "description": "A very simple alien-signals wrapper, designed for simpler use only.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "node ./src/test.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shixiongfei/signals.git"
+  },
+  "keywords": [
+    "signal",
+    "signals",
+    "alien-signals",
+    "reactive",
+    "reactivity"
+  ],
+  "author": "shixiongfei",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/shixiongfei/signals/issues"
+  },
+  "homepage": "https://github.com/shixiongfei/signals#readme",
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "alien-signals": "^3.2.1"
+  }
+}
