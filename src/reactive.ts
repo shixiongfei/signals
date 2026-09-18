@@ -78,7 +78,11 @@ export function reactive<T extends object>(target: T): T {
         return obj;
       }
 
-      if (isBuiltInSymbol(key) || !hasOwn(obj, key)) {
+      if (isBuiltInSymbol(key)) {
+        return Reflect.get(obj, key, receiver);
+      }
+
+      if (!hasOwn(obj, key)) {
         if (Array.isArray(obj) && arrayMutations.has(key)) {
           const method = Reflect.get(obj, key, receiver) as Function;
 
@@ -87,7 +91,9 @@ export function reactive<T extends object>(target: T): T {
           };
         }
 
-        return Reflect.get(obj, key, receiver);
+        if (key in obj) {
+          return Reflect.get(obj, key, receiver);
+        }
       }
 
       return getSignal(key, (obj as any)[key]).get();
