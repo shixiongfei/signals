@@ -9,7 +9,7 @@
  * https://github.com/shixiongfei/signals
  */
 
-import { signal } from "./signals.ts";
+import { batch, signal } from "./signals.ts";
 import type { Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
@@ -20,6 +20,18 @@ const builtInSymbols = new Set(
     .map((k) => (Symbol as any)[k])
     .filter((v) => typeof v === "symbol"),
 );
+
+const arrayMutations = new Set<PropertyKey>([
+  "push",
+  "pop",
+  "shift",
+  "unshift",
+  "splice",
+  "sort",
+  "reverse",
+  "fill",
+  "copyWithin",
+]);
 
 const isBuiltInSymbol = (key: PropertyKey) =>
   typeof key === "symbol" && builtInSymbols.has(key);
@@ -67,6 +79,14 @@ export function reactive<T extends object>(target: T): T {
       }
 
       if (isBuiltInSymbol(key) || !hasOwn(obj, key)) {
+        if (Array.isArray(obj) && arrayMutations.has(key)) {
+          const method = Reflect.get(obj, key, receiver) as Function;
+
+          return (...args: any[]) => {
+            return batch(() => Reflect.apply(method, receiver, args));
+          };
+        }
+
         return Reflect.get(obj, key, receiver);
       }
 
