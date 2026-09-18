@@ -121,8 +121,17 @@ export function reactive<T extends object>(target: T): T {
     },
 
     deleteProperty(obj, key) {
-      signalMap.delete(key);
-      return Reflect.deleteProperty(obj, key);
+      const deleted = Reflect.deleteProperty(obj, key);
+
+      if (deleted) {
+        const state = signalMap.get(key);
+
+        if (state) {
+          state.set(undefined);
+        }
+      }
+
+      return deleted;
     },
 
     has(obj, key) {
