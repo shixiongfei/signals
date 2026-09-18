@@ -374,4 +374,39 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(observed.arr, [1]);
     assert.deepStrictEqual(obj.arr, [1, 2]);
   });
+
+  test("test reactive - prototype property should not create signal", () => {
+    const proto = { foo: 1 };
+    const obj = Object.create(proto);
+    const observed = signals.reactive(obj);
+    const output: number[] = [];
+
+    const dispose = signals.effect(() => {
+      output.push(observed.foo);
+    });
+
+    assert.deepStrictEqual(output, [1]);
+
+    proto.foo = 2;
+
+    assert.deepStrictEqual(output, [1]);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(obj, "foo"), false);
+
+    dispose();
+  });
+
+  test("test reactive - missing property should create dependency", () => {
+    const observed = signals.reactive<{ foo?: number }>({});
+    const output: unknown[] = [];
+
+    const dispose = signals.effect(() => {
+      output.push(observed.foo);
+    });
+
+    observed.foo = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [undefined, 1]);
+  });
 });
