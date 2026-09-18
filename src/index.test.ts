@@ -147,7 +147,9 @@ describe("Signals Unit Test", () => {
 
     assert.strictEqual(total.get(), 2);
   });
+});
 
+describe("Reactive Unit Test", () => {
   test("test reactive", () => {
     const output: number[] = [];
     const obj = { count: 0, arr: [-100] };
@@ -155,6 +157,7 @@ describe("Signals Unit Test", () => {
 
     assert.strictEqual(observed === signals.reactive(obj), true);
     assert.strictEqual(observed === signals.reactive(observed), true);
+    assert.strictEqual(observed.arr === signals.reactive(observed.arr), true);
 
     const dispose1 = signals.effect(() => {
       output.push(observed.count);
@@ -173,9 +176,181 @@ describe("Signals Unit Test", () => {
       output.push(observed.arr.length);
     });
 
-    obj.arr.push(10);
+    observed.arr.push(10);
 
     dispose2();
     assert.deepStrictEqual(output, [1, 2]);
+  });
+
+  test("test reactive array - read and write", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      arr: [1, 2, 3],
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr[0]);
+    });
+
+    observed.arr[0] = 10;
+    observed.arr[1] = 20;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 10]);
+    assert.strictEqual(observed.arr[0], 10);
+    assert.strictEqual(observed.arr[1], 20);
+  });
+
+  test("test reactive array - push", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      arr: [1, 2],
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr.length);
+    });
+
+    observed.arr.push(3);
+    observed.arr.push(4);
+
+    dispose();
+
+    assert.deepStrictEqual(output, [2, 3, 4]);
+    assert.deepStrictEqual(observed.arr, [1, 2, 3, 4]);
+  });
+
+  test("test reactive array - pop", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      arr: [1, 2, 3],
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr.length);
+    });
+
+    observed.arr.pop();
+    observed.arr.pop();
+
+    dispose();
+
+    assert.deepStrictEqual(output, [3, 2, 1]);
+    assert.deepStrictEqual(observed.arr, [1]);
+  });
+
+  test("test reactive array - shift and unshift", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      arr: [2, 3],
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr[0]);
+    });
+
+    observed.arr.unshift(1);
+    observed.arr.shift();
+
+    dispose();
+
+    assert.deepStrictEqual(output, [2, 1, 2]);
+    assert.deepStrictEqual(observed.arr, [2, 3]);
+  });
+
+  test("test reactive array - splice", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive({
+      arr: [1, 2, 3, 4],
+    });
+
+    const dispose = signals.effect(() => {
+      output.push([observed.arr.length, observed.arr[1], observed.arr[2]]);
+    });
+
+    observed.arr.splice(1, 1, 20, 30);
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [4, 2, 3],
+      [5, 20, 30],
+    ]);
+
+    assert.deepStrictEqual(observed.arr, [1, 20, 30, 3, 4]);
+  });
+
+  test("test reactive array - length", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      arr: [1, 2, 3],
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr.length);
+    });
+
+    observed.arr.length = 5;
+    observed.arr.length = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [3, 5, 1]);
+    assert.strictEqual(observed.arr.length, 1);
+  });
+
+  test("test reactive array - new index", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive({
+      arr: [] as number[],
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr[0]);
+    });
+
+    observed.arr.push(10);
+    observed.arr[0] = 20;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [undefined, 10, 20]);
+  });
+
+  test("test reactive array - independent index", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      arr: [1, 2],
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr[0]);
+    });
+
+    observed.arr[1] = 20;
+    observed.arr[1] = 30;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1]);
+  });
+
+  test("test reactive array - raw object bypasses reactivity", () => {
+    const output: number[] = [];
+    const obj = { arr: [1] };
+    const observed = signals.reactive(obj);
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr.length);
+    });
+
+    obj.arr.push(2);
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1]);
+    assert.deepStrictEqual(observed.arr, [1]);
+    assert.deepStrictEqual(obj.arr, [1, 2]);
   });
 });
