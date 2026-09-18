@@ -38,20 +38,13 @@ export function reactive<T extends object>(target: T): T {
     return target;
   }
 
-  if (isReactive(target)) {
-    return target;
-  }
-
   if (proxyMap.has(target)) {
     return proxyMap.get(target);
   }
 
-  Object.defineProperty(target, RAW, {
-    value: target,
-    enumerable: false,
-    writable: false,
-    configurable: true,
-  });
+  if (isReactive(target)) {
+    return target;
+  }
 
   const signalMap = new Map<PropertyKey, Signal<any>>();
   const wrap = <T>(value: T) => (isObject(value) ? reactive(value) : value);
@@ -123,6 +116,14 @@ export function reactive<T extends object>(target: T): T {
     },
   });
 
+  Object.defineProperty(proxy, RAW, {
+    value: target,
+    enumerable: false,
+    writable: false,
+    configurable: true,
+  });
+
   proxyMap.set(target, proxy);
+
   return proxy;
 }
