@@ -59,10 +59,10 @@ export function effectScope(fn: () => void) {
   return alien.effectScope(fn);
 }
 
-export function batch(fn: () => void) {
+export function batch<T>(fn: () => T) {
   alien.startBatch();
   try {
-    fn();
+    return fn();
   } finally {
     alien.endBatch();
   }
