@@ -147,4 +147,22 @@ describe("Signals Unit Test", () => {
 
     assert.strictEqual(total.get(), 2);
   });
+
+  test("test reactive", () => {
+    const output: number[] = [];
+    const counter = { value: 0 };
+    const observed = signals.reactive(counter);
+
+    const dispose = signals.effect(() => {
+      output.push(observed.value);
+    });
+
+    observed.value++;
+    observed.value += 100;
+
+    assert.deepStrictEqual(output, [0, 1, 101]);
+    assert.strictEqual(counter.value, 101);
+
+    dispose();
+  });
 });
