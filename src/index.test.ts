@@ -409,4 +409,83 @@ describe("Reactive Unit Test", () => {
 
     assert.deepStrictEqual(output, [undefined, 1]);
   });
+
+  test("test reactive - delete property", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive<{ foo?: number }>({ foo: 1 });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.foo);
+    });
+
+    delete observed.foo;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, undefined]);
+  });
+
+  test("test reactive - delete and set property again", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive<{ foo?: number }>({ foo: 1 });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.foo);
+    });
+
+    delete observed.foo;
+    observed.foo = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, undefined, 2]);
+  });
+
+  test("test reactive - delete missing property", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive<{ foo?: number }>({});
+
+    const dispose = signals.effect(() => {
+      output.push(observed.foo);
+    });
+
+    delete observed.foo;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [undefined]);
+  });
+
+  test("test reactive - delete prototype property", () => {
+    const proto = { foo: 1 };
+    const observed = signals.reactive(Object.create(proto));
+
+    const output: unknown[] = [];
+
+    const dispose = signals.effect(() => {
+      output.push(observed.foo);
+    });
+
+    delete observed.foo;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1]);
+  });
+
+  test("test reactive - delete array index", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive([10, 20]);
+
+    const dispose = signals.effect(() => {
+      output.push(observed[0]);
+    });
+
+    delete observed[0];
+    observed[0] = 30;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [10, undefined, 30]);
+  });
 });
