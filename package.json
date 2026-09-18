@@ -13,6 +13,10 @@
     "type": "git",
     "url": "git+https://github.com/shixiongfei/signals.git"
   },
+  "files": [
+    "dist",
+    "src"
+  ],
   "keywords": [
     "signal",
     "signals",
