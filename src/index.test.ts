@@ -182,6 +182,27 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(output, [1, 2]);
   });
 
+  test("batch should run effect once", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      arr: [1, 2, 3],
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr[0]);
+    });
+
+    signals.batch(() => {
+      observed.arr[0] = 10;
+      observed.arr[0] = 20;
+      observed.arr[0] = 30;
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 30]);
+  });
+
   test("test reactive array - read and write", () => {
     const output: number[] = [];
     const observed = signals.reactive({
