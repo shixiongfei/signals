@@ -150,19 +150,32 @@ describe("Signals Unit Test", () => {
 
   test("test reactive", () => {
     const output: number[] = [];
-    const counter = { value: 0 };
-    const observed = signals.reactive(counter);
+    const obj = { count: 0, arr: [-100] };
+    const observed = signals.reactive(obj);
 
-    const dispose = signals.effect(() => {
-      output.push(observed.value);
+    assert.strictEqual(observed === signals.reactive(obj), true);
+    assert.strictEqual(observed === signals.reactive(observed), true);
+
+    const dispose1 = signals.effect(() => {
+      output.push(observed.count);
     });
 
-    observed.value++;
-    observed.value += 100;
+    observed.count++;
+    observed.count += 100;
 
+    dispose1();
     assert.deepStrictEqual(output, [0, 1, 101]);
-    assert.strictEqual(counter.value, 101);
+    assert.strictEqual(obj.count, 101);
 
-    dispose();
+    output.splice(0, output.length);
+
+    const dispose2 = signals.effect(() => {
+      output.push(observed.arr.length);
+    });
+
+    obj.arr.push(10);
+
+    dispose2();
+    assert.deepStrictEqual(output, [1, 2]);
   });
 });
