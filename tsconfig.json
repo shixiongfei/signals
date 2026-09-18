@@ -2,6 +2,12 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
+    "types": ["node"],
+    "module": "nodenext",
+    "moduleResolution": "NodeNext",
+    "declaration": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "sourceMap": true
   }
 }
