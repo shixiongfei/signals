@@ -152,6 +152,10 @@ export function reactive<T extends object>(target: T): T {
 
           if (Array.isArray(obj) && obj.length !== length) {
             signalMap.get("length")?.set(obj.length);
+
+            for (let i = obj.length; i < length; i++) {
+              signalMap.get(String(i))?.set(undefined);
+            }
           }
         }
 
