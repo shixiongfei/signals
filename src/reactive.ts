@@ -9,7 +9,7 @@
  * https://github.com/shixiongfei/signals
  */
 
-import { batch, signal } from "./signals.ts";
+import { batch, signal, trigger } from "./signals.ts";
 import type { Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
@@ -137,16 +137,17 @@ export function reactive<T extends object>(target: T): T {
         const ok = Reflect.set(obj, key, value, receiver);
 
         if (ok) {
-          const wrapped = wrap(value);
-          const state = signalMap.get(key);
+          let state = signalMap.get(key);
 
           if (state) {
-            state.set(wrapped);
+            state.set(wrap(value));
           } else {
-            signalMap.set(key, signal(wrapped));
+            state = signal(wrap(value));
+            signalMap.set(key, state);
           }
 
           if (!hadOwn && !hadKey) {
+            trigger(state.get);
             triggerIterate();
           }
 
@@ -156,6 +157,8 @@ export function reactive<T extends object>(target: T): T {
             for (let i = obj.length; i < length; i++) {
               signalMap.get(String(i))?.set(undefined);
             }
+
+            triggerIterate();
           }
         }
 
@@ -177,6 +180,10 @@ export function reactive<T extends object>(target: T): T {
 
           if (state) {
             state.set(undefined);
+
+            if (hadOwn && !hasOwn(obj, key)) {
+              trigger(state.get);
+            }
           }
 
           if (hadOwn) {
