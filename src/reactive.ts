@@ -59,6 +59,8 @@ export function reactive<T extends object>(target: T): T {
   }
 
   const signalMap = new Map<PropertyKey, Signal<any>>();
+  const mutators = new Map<PropertyKey, Function>();
+
   const wrap = <T>(value: T) => (isObject(value) ? reactive(value) : value);
 
   const getSignal = <T>(key: PropertyKey, initial: T): Signal<T> => {
@@ -84,11 +86,19 @@ export function reactive<T extends object>(target: T): T {
 
       if (!hasOwn(obj, key)) {
         if (Array.isArray(obj) && arrayMutations.has(key)) {
-          const method = Reflect.get(obj, key, receiver) as Function;
+          let fn = mutators.get(key);
 
-          return (...args: any[]) => {
-            return batch(() => Reflect.apply(method, receiver, args));
-          };
+          if (!fn) {
+            const method = Reflect.get(obj, key, receiver) as Function;
+
+            fn = (...args: any[]) => {
+              return batch(() => Reflect.apply(method, receiver, args));
+            };
+
+            mutators.set(key, fn);
+          }
+
+          return fn;
         }
 
         if (key in obj) {
@@ -108,16 +118,20 @@ export function reactive<T extends object>(target: T): T {
         return Reflect.set(obj, key, value, receiver);
       }
 
-      const wrapped = wrap(value);
-      const state = signalMap.get(key);
+      const ok = Reflect.set(obj, key, value, receiver);
 
-      if (state) {
-        state.set(wrapped);
-      } else {
-        signalMap.set(key, signal(wrapped));
+      if (ok) {
+        const wrapped = wrap(value);
+        const state = signalMap.get(key);
+
+        if (state) {
+          state.set(wrapped);
+        } else {
+          signalMap.set(key, signal(wrapped));
+        }
       }
 
-      return Reflect.set(obj, key, value, receiver);
+      return ok;
     },
 
     deleteProperty(obj, key) {
