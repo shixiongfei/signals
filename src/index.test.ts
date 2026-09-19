@@ -1609,3 +1609,82 @@ describe("Reactive Accessor Unit Test", () => {
     assert.strictEqual(observed.v, undefined);
   });
 });
+
+describe("Reactive toRaw Unit Test", () => {
+  test("toRaw should return the original object and array", () => {
+    const obj = { arr: [1, 2], child: { x: 1 } };
+    const observed = signals.reactive(obj);
+
+    assert.strictEqual(signals.toRaw(observed), obj);
+    assert.strictEqual(signals.toRaw(observed.arr), obj.arr);
+    assert.strictEqual(signals.toRaw(observed.child), obj.child);
+  });
+
+  test("toRaw should return non-reactive values as is", () => {
+    const obj = { a: 1 };
+    const d = new Date(0);
+    const fn = () => 1;
+
+    assert.strictEqual(signals.toRaw(obj), obj);
+    assert.strictEqual(signals.toRaw(d), d);
+    assert.strictEqual(signals.toRaw(fn), fn);
+    assert.strictEqual(signals.toRaw(1), 1);
+    assert.strictEqual(signals.toRaw(null), null);
+    assert.strictEqual(signals.toRaw(undefined), undefined);
+  });
+
+  test("toRaw should not create a proxy for a plain object", () => {
+    const obj = { child: { x: 1 } };
+
+    signals.toRaw(obj);
+    signals.toRaw(obj.child);
+
+    const observed = signals.reactive(obj);
+
+    assert.strictEqual(signals.toRaw(observed), obj);
+    assert.strictEqual(signals.toRaw(signals.toRaw(observed)), obj);
+  });
+
+  test("toRaw should not subscribe the effect", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ count: 0 });
+
+    const dispose = signals.effect(() => {
+      output.push(signals.toRaw(observed).count);
+    });
+
+    observed.count = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [0]);
+  });
+
+  test("changes on raw object should bypass reactivity, changes through proxy should be visible on raw", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ count: 0 });
+    const raw = signals.toRaw(observed);
+
+    const dispose = signals.effect(() => {
+      output.push(observed.count);
+    });
+
+    raw.count = 5;
+    assert.deepStrictEqual(output, [0]);
+
+    observed.count = 6;
+    assert.strictEqual(raw.count, 6);
+    assert.deepStrictEqual(output, [0, 6]);
+
+    dispose();
+  });
+
+  test("toRaw result should be usable with structuredClone", () => {
+    const observed = signals.reactive({ list: [{ id: 1 }], n: 2 });
+
+    assert.deepStrictEqual(structuredClone(signals.toRaw(observed)), {
+      list: [{ id: 1 }],
+      n: 2,
+    });
+  });
+});

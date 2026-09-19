@@ -288,3 +288,7 @@ export function reactive<T extends object>(target: T): T {
   proxyMap.set(target, proxy);
   return proxy;
 }
+
+export function toRaw<T>(value: T): T {
+  return isObject(value) ? ((value as any)[RAW] ?? value) : value;
+}
