@@ -144,6 +144,10 @@ export function reactive<T extends object>(target: T): T {
       let state = signalMap.get(key);
 
       if (!state) {
+        if (Object.getOwnPropertyDescriptor(obj, key)?.get) {
+          return wrap(Reflect.get(obj, key, receiver));
+        }
+
         state = signal(wrap(Reflect.get(obj, key, receiver)));
         signalMap.set(key, state);
       }
@@ -250,14 +254,18 @@ export function reactive<T extends object>(target: T): T {
       const result = Reflect.has(obj, key);
 
       if (!result || hasOwn(obj, key)) {
-        let state = signalMap.get(key);
+        if (result && Object.getOwnPropertyDescriptor(obj, key)?.get) {
+          getSignal(ITERATE, 0).get();
+        } else {
+          let state = signalMap.get(key);
 
-        if (!state) {
-          state = signal(wrap(Reflect.get(obj, key, proxy)));
-          signalMap.set(key, state);
+          if (!state) {
+            state = signal(wrap(Reflect.get(obj, key, proxy)));
+            signalMap.set(key, state);
+          }
+
+          state.get();
         }
-
-        state.get();
       }
 
       return result;

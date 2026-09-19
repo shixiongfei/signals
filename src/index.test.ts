@@ -1215,3 +1215,336 @@ describe("Reactive Structure Unit Test", () => {
     assert.deepStrictEqual(output, [0, 5]);
   });
 });
+
+describe("Reactive Accessor Unit Test", () => {
+  test("getter should depend on multiple properties", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      a: 1,
+      b: 2,
+
+      get sum() {
+        return this.a + this.b;
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.sum);
+    });
+
+    observed.a = 10;
+    observed.b = 20;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [3, 12, 30]);
+  });
+
+  test("getter should not rerun effect when unrelated property changes", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      a: 1,
+      other: 0,
+
+      get double() {
+        return this.a * 2;
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.double);
+    });
+
+    observed.other = 1;
+    observed.other = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [2]);
+  });
+
+  test("getter depending on another getter should be tracked", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      a: 1,
+
+      get double() {
+        return this.a * 2;
+      },
+
+      get quad() {
+        return this.double * 2;
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.quad);
+    });
+
+    observed.a = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [4, 8]);
+  });
+
+  test("setter should notify effect reading the getter", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      _v: 1,
+
+      get v() {
+        return this._v;
+      },
+
+      set v(x: number) {
+        this._v = x * 10;
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.v);
+    });
+
+    observed.v = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 20]);
+  });
+
+  test("setter writing multiple properties should run effect once", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      a: 0,
+      b: 0,
+
+      get sum() {
+        return this.a + this.b;
+      },
+
+      set both(x: number) {
+        this.a = x;
+        this.b = x;
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.sum);
+    });
+
+    observed.both = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [0, 4]);
+  });
+
+  test("getter should return fresh value after 'in' check", () => {
+    const output: boolean[] = [];
+    const observed = signals.reactive({
+      a: 1,
+
+      get double() {
+        return this.a * 2;
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push("double" in observed);
+    });
+
+    observed.a = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [true]);
+  });
+
+  test("getter should stay fresh in effect that also uses 'in'", () => {
+    const output: [boolean, number][] = [];
+    const observed = signals.reactive({
+      a: 1,
+
+      get double() {
+        return this.a * 2;
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(["double" in observed, observed.double]);
+    });
+
+    observed.a = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [true, 2],
+      [true, 4],
+    ]);
+  });
+
+  test("in should not invoke own getter nor depend on its dependencies", () => {
+    let calls = 0;
+    const output: boolean[] = [];
+    const observed = signals.reactive({
+      a: 1,
+
+      get foo() {
+        calls++;
+        return this.a;
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push("foo" in observed);
+    });
+
+    observed.a = 2;
+
+    dispose();
+
+    assert.strictEqual(calls, 0);
+    assert.deepStrictEqual(output, [true]);
+  });
+
+  test("getter returning derived array should be tracked", () => {
+    const output: number[][] = [];
+    const observed = signals.reactive({
+      items: [1, 2, 3],
+
+      get evens() {
+        return this.items.filter((n) => n % 2 === 0);
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push([...observed.evens]);
+    });
+
+    observed.items.push(4);
+
+    dispose();
+
+    assert.deepStrictEqual(output, [[2], [2, 4]]);
+  });
+
+  test("getter returning new object should be tracked", () => {
+    const output: string[] = [];
+    const observed = signals.reactive({
+      price: 10,
+      qty: 2,
+
+      get summary() {
+        return { total: this.price * this.qty, label: `x${this.qty}` };
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      const s = observed.summary;
+      output.push(`${s.label}:${s.total}`);
+    });
+
+    observed.qty = 3;
+    observed.price = 5;
+
+    dispose();
+
+    assert.deepStrictEqual(output, ["x2:20", "x3:30", "x3:15"]);
+  });
+
+  test("getter returning shared raw object should be reactive through wrap", () => {
+    const output: number[] = [];
+    const shared = { n: 1 };
+    const observed = signals.reactive({
+      get item() {
+        return shared;
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.item.n);
+    });
+
+    observed.item.n = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 2]);
+  });
+
+  test("getter returning reactive array should keep identity", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      list: [1],
+
+      get view() {
+        return this.list;
+      },
+    });
+
+    assert.strictEqual(observed.view === observed.list, true);
+
+    const dispose = signals.effect(() => {
+      output.push(observed.view.length);
+    });
+
+    observed.list.push(2);
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 2]);
+  });
+
+  test("getter over array of objects should react to element and structure changes", () => {
+    const output: string[][] = [];
+    const observed = signals.reactive({
+      users: [
+        { name: "a", active: true },
+        { name: "b", active: false },
+      ],
+
+      get activeNames() {
+        return this.users.filter((u) => u.active).map((u) => u.name);
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push([...observed.activeNames]);
+    });
+
+    observed.users[1].active = true;
+    observed.users.push({ name: "c", active: true });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [["a"], ["a", "b"], ["a", "b", "c"]]);
+  });
+
+  test("setter accepting array should notify effect reading the getter", () => {
+    const output: string[][] = [];
+    const observed = signals.reactive({
+      _tags: ["a"] as string[],
+
+      get tags() {
+        return this._tags;
+      },
+
+      set tags(v: string[]) {
+        this._tags = v.map((s) => s.toUpperCase());
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push([...observed.tags]);
+    });
+
+    observed.tags = ["x", "y"];
+    observed.tags.push("z");
+
+    dispose();
+
+    assert.deepStrictEqual(output, [["a"], ["X", "Y"], ["X", "Y", "z"]]);
+  });
+});
