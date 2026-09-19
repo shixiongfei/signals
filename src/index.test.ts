@@ -634,6 +634,50 @@ describe("Reactive Unit Test", () => {
     assert.strictEqual(observed.list.lastIndexOf(a, 0), 0);
   });
 
+  test("test reactive array - mutation inside effect should not subscribe to the array", () => {
+    const observed = signals.reactive({ count: 0, log: [] as number[] });
+    let runs = 0;
+
+    const dispose = signals.effect(() => {
+      runs++;
+      observed.log.push(observed.count);
+    });
+
+    observed.log.push(-1);
+
+    dispose();
+
+    assert.strictEqual(runs, 1);
+    assert.deepStrictEqual(observed.log, [0, -1]);
+  });
+
+  // test("test reactive array - shrink sparse array should be fast", () => {
+  //   const observed = signals.reactive({ arr: [] as number[] });
+
+  //   observed.arr[50_000_000] = 1;
+
+  //   const start = Date.now();
+  //   observed.arr.length = 0;
+
+  //   assert.strictEqual(observed.arr.length, 0);
+  //   assert.ok(Date.now() - start < 500);
+  // });
+
+  test("test reactive - frozen object should not throw on read", () => {
+    const observed = signals.reactive(Object.freeze({ a: { x: 1 } }));
+
+    assert.doesNotThrow(() => observed.a);
+    assert.strictEqual(observed.a.x, 1);
+  });
+
+  test("test reactive - frozen child should be stored raw", () => {
+    const child = Object.freeze({ x: { y: 1 } });
+    const observed = signals.reactive({ child });
+
+    assert.strictEqual(observed.child, child);
+    assert.doesNotThrow(() => observed.child.x);
+  });
+
   test("test reactive - prototype property should not create signal", () => {
     const proto = Object.create({ foo: 1 });
     const observed = signals.reactive(proto);
@@ -1546,5 +1590,22 @@ describe("Reactive Accessor Unit Test", () => {
     dispose();
 
     assert.deepStrictEqual(output, [["a"], ["X", "Y"], ["X", "Y", "z"]]);
+  });
+
+  test("test reactive - setter-only property should not cache assigned value", () => {
+    const observed: any = signals.reactive({
+      _v: 0,
+
+      set v(x: number) {
+        this._v = x;
+      },
+    });
+
+    assert.strictEqual(observed.v, undefined);
+
+    observed.v = 5;
+
+    assert.strictEqual(observed._v, 5);
+    assert.strictEqual(observed.v, undefined);
   });
 });

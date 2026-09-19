@@ -18,24 +18,12 @@ export type SignalSetter<T> = { set: (value: T | SignalSetterFn<T>) => void };
 export type Signal<T> = SignalGetter<T> & SignalSetter<T>;
 export type Computed<T> = SignalGetter<T>;
 
-function getter<T>(state: () => T) {
-  const untrack = () => {
-    const sub = alien.setActiveSub(undefined);
-    try {
-      return state();
-    } finally {
-      alien.setActiveSub(sub);
-    }
-  };
-
-  return (options?: SignalGetterOptions) => {
-    return !options?.untrack ? state() : untrack();
-  };
-}
-
 export function signal<T>(initialValue: T): Signal<T> {
   const state = alien.signal(initialValue);
-  const get = getter<T>(state);
+
+  const get = (options?: SignalGetterOptions) => {
+    return !options?.untrack ? state() : untrack<T>(state);
+  };
 
   const set = (value: T | SignalSetterFn<T>) => {
     typeof value === "function"
@@ -47,7 +35,12 @@ export function signal<T>(initialValue: T): Signal<T> {
 }
 
 export function computed<T>(fn: () => T): Computed<T> {
-  const get = getter<T>(alien.computed(fn));
+  const computed = alien.computed(fn);
+
+  const get = (options?: SignalGetterOptions) => {
+    return !options?.untrack ? computed() : untrack(computed);
+  };
+
   return { get };
 }
 
@@ -65,6 +58,15 @@ export function batch<T>(fn: () => T) {
     return fn();
   } finally {
     alien.endBatch();
+  }
+}
+
+export function untrack<T>(fn: () => T): T {
+  const sub = alien.setActiveSub(undefined);
+  try {
+    return fn();
+  } finally {
+    alien.setActiveSub(sub);
   }
 }
 

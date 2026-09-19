@@ -9,7 +9,7 @@
  * https://github.com/shixiongfei/signals
  */
 
-import { batch, signal, trigger } from "./signals.ts";
+import { batch, signal, trigger, untrack } from "./signals.ts";
 import type { Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
@@ -46,7 +46,8 @@ const isBuiltInSymbol = (key: PropertyKey) =>
 const isProxiable = (value: unknown) =>
   isObject(value) &&
   (Array.isArray(value) ||
-    Object.prototype.toString.call(value) === "[object Object]");
+    Object.prototype.toString.call(value) === "[object Object]") &&
+  !Object.isFrozen(value);
 
 const isObject = (value: unknown) =>
   value !== null && typeof value === "object";
@@ -54,13 +55,18 @@ const isObject = (value: unknown) =>
 const isReactive = (value: unknown) =>
   isObject(value) && (value as any)[RAW] !== undefined;
 
+const isAccessor = (obj: object, key: PropertyKey) => {
+  const desc = Object.getOwnPropertyDescriptor(obj, key);
+  return desc !== undefined && !("value" in desc);
+};
+
 const hasOwn = (obj: object, key: PropertyKey) =>
   Object.prototype.hasOwnProperty.call(obj, key);
 
 const wrap = (value: any) => (isProxiable(value) ? reactive(value) : value);
 
 export function reactive<T extends object>(target: T): T {
-  if (!isObject(target)) {
+  if (!isObject(target) || Object.isFrozen(target)) {
     return target;
   }
 
@@ -109,7 +115,9 @@ export function reactive<T extends object>(target: T): T {
               const method = Reflect.get(obj, key, receiver) as Function;
 
               fn = (...args: any[]) => {
-                return batch(() => Reflect.apply(method, receiver, args));
+                return batch(() =>
+                  untrack(() => Reflect.apply(method, receiver, args)),
+                );
               };
 
               functionMap.set(key, fn);
@@ -144,7 +152,7 @@ export function reactive<T extends object>(target: T): T {
       let state = signalMap.get(key);
 
       if (!state) {
-        if (Object.getOwnPropertyDescriptor(obj, key)?.get) {
+        if (isAccessor(obj, key)) {
           return wrap(Reflect.get(obj, key, receiver));
         }
 
@@ -254,7 +262,7 @@ export function reactive<T extends object>(target: T): T {
       const result = Reflect.has(obj, key);
 
       if (!result || hasOwn(obj, key)) {
-        if (result && Object.getOwnPropertyDescriptor(obj, key)?.get) {
+        if (result && isAccessor(obj, key)) {
           getSignal(ITERATE, 0).get();
         } else {
           let state = signalMap.get(key);
