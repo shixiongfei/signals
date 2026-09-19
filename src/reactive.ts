@@ -124,26 +124,8 @@ export function reactive<T extends object>(target: T): T {
               const method = Reflect.get(obj, key, receiver) as Function;
 
               fn = (...args: any[]) => {
-                let result = Reflect.apply(method, receiver, args);
-
-                if (result === -1 || result === false) {
-                  const proxied = proxyMap.get(args[0]);
-
-                  if (proxied) {
-                    const argsLen = args.length;
-                    const proxiedArgs = new Array(argsLen);
-
-                    proxiedArgs[0] = proxied;
-
-                    for (let i = 1; i < argsLen; i++) {
-                      proxiedArgs[i] = args[i];
-                    }
-
-                    result = Reflect.apply(method, receiver, proxiedArgs);
-                  }
-                }
-
-                return result;
+                args[0] = wrap(args[0]);
+                return Reflect.apply(method, receiver, args);
               };
 
               functionMap.set(key, fn);

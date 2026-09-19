@@ -571,6 +571,24 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(output, [["0", "1", "2"]]);
   });
 
+  test("test reactive array - search should miss raw item that is reactive elsewhere", () => {
+    const other = { id: 9 };
+    const observed = signals.reactive({ list: [{ id: 0 }], other });
+
+    observed.other;
+
+    assert.strictEqual(observed.list.indexOf(other), -1);
+    assert.strictEqual(observed.list.includes(other), false);
+  });
+
+  test("test reactive array - lastIndexOf fromIndex should be preserved", () => {
+    const a = { id: 0 };
+    const observed = signals.reactive({ list: [a, a] });
+
+    assert.strictEqual(observed.list.lastIndexOf(a), 1);
+    assert.strictEqual(observed.list.lastIndexOf(a, 0), 0);
+  });
+
   test("test reactive - prototype property should not create signal", () => {
     const proto = Object.create({ foo: 1 });
     const observed = signals.reactive(proto);
