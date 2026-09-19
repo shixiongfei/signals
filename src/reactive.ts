@@ -134,6 +134,15 @@ export function reactive<T extends object>(target: T): T {
         const hadOwn = hasOwn(obj, key);
         const hadKey = key in obj;
         const length = Array.isArray(obj) ? obj.length : 0;
+
+        if (
+          Array.isArray(obj) &&
+          key === "length" &&
+          typeof value !== "number"
+        ) {
+          value = Number(value);
+        }
+
         const ok = Reflect.set(obj, key, value, receiver);
 
         if (ok) {
@@ -155,7 +164,12 @@ export function reactive<T extends object>(target: T): T {
             signalMap.get("length")?.set(obj.length);
 
             for (let i = obj.length; i < length; i++) {
-              signalMap.get(String(i))?.set(undefined);
+              const state = signalMap.get(String(i));
+
+              if (state) {
+                state.set(undefined);
+                trigger(state.get);
+              }
             }
 
             triggerIterate();
