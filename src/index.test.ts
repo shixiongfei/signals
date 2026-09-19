@@ -158,6 +158,7 @@ describe("Reactive Unit Test", () => {
     assert.strictEqual(observed === signals.reactive(obj), true);
     assert.strictEqual(observed === signals.reactive(observed), true);
     assert.strictEqual(observed.arr === signals.reactive(observed.arr), true);
+    assert.strictEqual(Array.isArray(observed.arr), true);
 
     const dispose1 = signals.effect(() => {
       output.push(observed.count);
@@ -355,6 +356,61 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(output, [1]);
     assert.deepStrictEqual(observed.arr, [1]);
     assert.deepStrictEqual(obj.arr, [1, 2]);
+  });
+
+  test("test reactive array - assign at length should notify length", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ arr: [1, 2] });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr.length);
+    });
+
+    observed.arr[2] = 3;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [2, 3]);
+  });
+
+  test("test reactive array - shrink length should notify removed index", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive({ arr: [1, 2, 3] });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr[2]);
+    });
+
+    observed.arr.length = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [3, undefined]);
+  });
+
+  test("test reactive array - shrink length should not leave stale index value", () => {
+    const observed = signals.reactive({ arr: [1, 2, 3] });
+
+    assert.strictEqual(observed.arr[2], 3);
+
+    observed.arr.length = 1;
+
+    assert.strictEqual(observed.arr[2], undefined);
+  });
+
+  test("test reactive array - shrink length should react to Object.keys", () => {
+    const output: string[][] = [];
+    const observed = signals.reactive({ arr: [1, 2, 3] });
+
+    const dispose = signals.effect(() => {
+      output.push(Object.keys(observed.arr));
+    });
+
+    observed.arr.length = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [["0", "1", "2"], ["0"]]);
   });
 
   test("test reactive - prototype property should not create signal", () => {
@@ -672,7 +728,7 @@ describe("Reactive Structure Unit Test", () => {
     assert.deepStrictEqual(output, [false]);
   });
 
-  test("has and property dependency should be batched together", () => {
+  test("has property dependency should be batched together", () => {
     const output: unknown[] = [];
     const observed = signals.reactive<{ foo?: number }>({});
 
@@ -688,6 +744,36 @@ describe("Reactive Structure Unit Test", () => {
       [false, undefined],
       [true, 1],
     ]);
+  });
+
+  test("has should react when property with undefined value is deleted", () => {
+    const output: boolean[] = [];
+    const observed = signals.reactive<{ foo?: number }>({ foo: undefined });
+
+    const dispose = signals.effect(() => {
+      output.push("foo" in observed);
+    });
+
+    delete observed.foo;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [true, false]);
+  });
+
+  test("has should react when property is added with undefined value", () => {
+    const output: boolean[] = [];
+    const observed = signals.reactive<{ foo?: number }>({});
+
+    const dispose = signals.effect(() => {
+      output.push("foo" in observed);
+    });
+
+    observed.foo = undefined;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [false, true]);
   });
 
   test("Object.keys should react to structural changes", () => {
