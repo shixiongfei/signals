@@ -50,16 +50,16 @@ export function reactive<T extends object>(target: T): T {
     return target;
   }
 
-  if (proxyMap.has(target)) {
-    return proxyMap.get(target);
-  }
-
   if (isReactive(target)) {
     return target;
   }
 
+  if (proxyMap.has(target)) {
+    return proxyMap.get(target);
+  }
+
   const signalMap = new Map<PropertyKey, Signal<any>>();
-  const mutators = new Map<PropertyKey, Function>();
+  const mutatorMap = new Map<PropertyKey, Function>();
 
   const wrap = <T>(value: T) => (isObject(value) ? reactive(value) : value);
 
@@ -86,7 +86,7 @@ export function reactive<T extends object>(target: T): T {
 
       if (!hasOwn(obj, key)) {
         if (Array.isArray(obj) && arrayMutations.has(key)) {
-          let fn = mutators.get(key);
+          let fn = mutatorMap.get(key);
 
           if (!fn) {
             const method = Reflect.get(obj, key, receiver) as Function;
@@ -95,7 +95,7 @@ export function reactive<T extends object>(target: T): T {
               return batch(() => Reflect.apply(method, receiver, args));
             };
 
-            mutators.set(key, fn);
+            mutatorMap.set(key, fn);
           }
 
           return fn;
@@ -165,14 +165,6 @@ export function reactive<T extends object>(target: T): T {
     },
   });
 
-  Object.defineProperty(proxy, RAW, {
-    value: target,
-    enumerable: false,
-    writable: false,
-    configurable: true,
-  });
-
   proxyMap.set(target, proxy);
-
   return proxy;
 }
