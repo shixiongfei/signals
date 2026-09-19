@@ -13,6 +13,7 @@ import { batch, signal } from "./signals.ts";
 import type { Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
+const ITERATE = Symbol("ITERATE");
 const proxyMap = new WeakMap<object, any>();
 
 const builtInSymbols = new Set(
@@ -74,6 +75,10 @@ export function reactive<T extends object>(target: T): T {
     return state;
   };
 
+  const triggerIterate = () => {
+    getSignal(ITERATE, 0).set((value) => value + 1);
+  };
+
   const proxy = new Proxy(target, {
     get(obj, key, receiver) {
       if (key === RAW) {
@@ -118,50 +123,63 @@ export function reactive<T extends object>(target: T): T {
         return Reflect.set(obj, key, value, receiver);
       }
 
-      const ok = Reflect.set(obj, key, value, receiver);
+      return batch(() => {
+        const hadOwn = hasOwn(obj, key);
+        const ok = Reflect.set(obj, key, value, receiver);
 
-      if (ok) {
-        const wrapped = wrap(value);
-        const state = signalMap.get(key);
+        if (ok) {
+          const wrapped = wrap(value);
+          const state = signalMap.get(key);
 
-        if (state) {
-          state.set(wrapped);
-        } else {
-          signalMap.set(key, signal(wrapped));
+          if (state) {
+            state.set(wrapped);
+          } else {
+            signalMap.set(key, signal(wrapped));
+          }
+
+          if (!hadOwn) {
+            triggerIterate();
+          }
         }
-      }
 
-      return ok;
+        return ok;
+      });
     },
 
     deleteProperty(obj, key) {
-      const deleted = Reflect.deleteProperty(obj, key);
+      return batch(() => {
+        const hadOwn = hasOwn(obj, key);
+        const deleted = Reflect.deleteProperty(obj, key);
 
-      if (deleted) {
-        const state = signalMap.get(key);
+        if (deleted) {
+          const state = signalMap.get(key);
 
-        if (state) {
-          state.set(undefined);
+          if (state) {
+            state.set(undefined);
+          }
+
+          if (hadOwn) {
+            triggerIterate();
+          }
         }
-      }
 
-      return deleted;
+        return deleted;
+      });
     },
 
     has(obj, key) {
-      return Reflect.has(obj, key);
+      const result = Reflect.has(obj, key);
+
+      if (!result || hasOwn(obj, key)) {
+        getSignal(key, (obj as any)[key]).get();
+      }
+
+      return result;
     },
 
     ownKeys(obj) {
+      getSignal(ITERATE, 0).get();
       return Reflect.ownKeys(obj);
-    },
-
-    getOwnPropertyDescriptor(obj, key) {
-      return Reflect.getOwnPropertyDescriptor(obj, key);
-    },
-
-    defineProperty(obj, key, descriptor) {
-      return Reflect.defineProperty(obj, key, descriptor);
     },
   });
 
