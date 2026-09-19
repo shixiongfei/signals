@@ -14,7 +14,7 @@ import type { Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
 const ITERATE = Symbol("ITERATE");
-const proxyMap = new WeakMap<object, any>();
+const proxyMap = new WeakMap<object, object>();
 
 const builtInSymbols = new Set(
   Object.getOwnPropertyNames(Symbol)
@@ -56,7 +56,7 @@ export function reactive<T extends object>(target: T): T {
   }
 
   if (proxyMap.has(target)) {
-    return proxyMap.get(target);
+    return proxyMap.get(target) as T;
   }
 
   const signalMap = new Map<PropertyKey, Signal<any>>();
@@ -89,29 +89,23 @@ export function reactive<T extends object>(target: T): T {
         return Reflect.get(obj, key, receiver);
       }
 
-      if (!hasOwn(obj, key)) {
-        if (Array.isArray(obj) && arrayMutations.has(key)) {
-          let fn = mutatorMap.get(key);
+      if (Array.isArray(obj) && !hasOwn(obj, key) && arrayMutations.has(key)) {
+        let fn = mutatorMap.get(key);
 
-          if (!fn) {
-            const method = Reflect.get(obj, key, receiver) as Function;
+        if (!fn) {
+          const method = Reflect.get(obj, key, receiver) as Function;
 
-            fn = (...args: any[]) => {
-              return batch(() => Reflect.apply(method, receiver, args));
-            };
+          fn = (...args: any[]) => {
+            return batch(() => Reflect.apply(method, receiver, args));
+          };
 
-            mutatorMap.set(key, fn);
-          }
-
-          return fn;
+          mutatorMap.set(key, fn);
         }
 
-        if (key in obj) {
-          return Reflect.get(obj, key, receiver);
-        }
+        return fn;
       }
 
-      return getSignal(key, (obj as any)[key]).get();
+      return getSignal(key, Reflect.get(obj, key, receiver)).get();
     },
 
     set(obj, key, value, receiver) {
@@ -147,6 +141,10 @@ export function reactive<T extends object>(target: T): T {
     },
 
     deleteProperty(obj, key) {
+      if (key === RAW) {
+        return true;
+      }
+
       return batch(() => {
         const hadOwn = hasOwn(obj, key);
         const deleted = Reflect.deleteProperty(obj, key);
@@ -168,13 +166,11 @@ export function reactive<T extends object>(target: T): T {
     },
 
     has(obj, key) {
-      const result = Reflect.has(obj, key);
-
-      if (!result || hasOwn(obj, key)) {
-        getSignal(key, (obj as any)[key]).get();
+      if (key !== RAW && !isBuiltInSymbol(key)) {
+        getSignal(key, Reflect.get(obj, key, proxy)).get();
       }
 
-      return result;
+      return Reflect.has(obj, key);
     },
 
     ownKeys(obj) {
