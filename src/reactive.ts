@@ -125,6 +125,7 @@ export function reactive<T extends object>(target: T): T {
 
       return batch(() => {
         const hadOwn = hasOwn(obj, key);
+        const hadKey = key in obj;
         const ok = Reflect.set(obj, key, value, receiver);
 
         if (ok) {
@@ -137,7 +138,7 @@ export function reactive<T extends object>(target: T): T {
             signalMap.set(key, signal(wrapped));
           }
 
-          if (!hadOwn) {
+          if (!hadOwn && !hadKey) {
             triggerIterate();
           }
         }
