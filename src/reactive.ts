@@ -219,7 +219,9 @@ export function reactive<T extends object>(target: T): T {
               }
             }
 
-            triggerIterate();
+            if (obj.length < length) {
+              triggerIterate();
+            }
           }
         }
 

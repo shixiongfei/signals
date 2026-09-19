@@ -556,6 +556,21 @@ describe("Reactive Unit Test", () => {
     ]);
   });
 
+  test("test reactive array - growing length should not notify Object.keys", () => {
+    const output: string[][] = [];
+    const observed = signals.reactive({ arr: [1, 2, 3] });
+
+    const dispose = signals.effect(() => {
+      output.push(Object.keys(observed.arr));
+    });
+
+    observed.arr.length = 5;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [["0", "1", "2"]]);
+  });
+
   test("test reactive - prototype property should not create signal", () => {
     const proto = Object.create({ foo: 1 });
     const observed = signals.reactive(proto);
