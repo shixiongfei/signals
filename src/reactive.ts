@@ -146,17 +146,17 @@ export function reactive<T extends object>(target: T): T {
         const ok = Reflect.set(obj, key, value, receiver);
 
         if (ok) {
-          let state = signalMap.get(key);
+          const state = signalMap.get(key);
 
           if (state) {
             state.set(wrap(value));
-          } else {
-            state = signal(wrap(value));
-            signalMap.set(key, state);
           }
 
           if (!hadOwn && !hadKey) {
-            trigger(state.get);
+            if (state) {
+              trigger(state.get);
+            }
+
             triggerIterate();
           }
 
