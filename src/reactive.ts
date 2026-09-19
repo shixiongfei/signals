@@ -89,20 +89,26 @@ export function reactive<T extends object>(target: T): T {
         return Reflect.get(obj, key, receiver);
       }
 
-      if (Array.isArray(obj) && !hasOwn(obj, key) && arrayMutations.has(key)) {
-        let fn = mutatorMap.get(key);
+      if (!hasOwn(obj, key)) {
+        if (Array.isArray(obj) && arrayMutations.has(key)) {
+          let fn = mutatorMap.get(key);
 
-        if (!fn) {
-          const method = Reflect.get(obj, key, receiver) as Function;
+          if (!fn) {
+            const method = Reflect.get(obj, key, receiver) as Function;
 
-          fn = (...args: any[]) => {
-            return batch(() => Reflect.apply(method, receiver, args));
-          };
+            fn = (...args: any[]) => {
+              return batch(() => Reflect.apply(method, receiver, args));
+            };
 
-          mutatorMap.set(key, fn);
+            mutatorMap.set(key, fn);
+          }
+
+          return fn;
         }
 
-        return fn;
+        if (key in obj) {
+          return Reflect.get(obj, key, receiver);
+        }
       }
 
       return getSignal(key, Reflect.get(obj, key, receiver)).get();
@@ -166,11 +172,17 @@ export function reactive<T extends object>(target: T): T {
     },
 
     has(obj, key) {
-      if (key !== RAW && !isBuiltInSymbol(key)) {
+      if (key === RAW) {
+        return true;
+      }
+
+      const result = Reflect.has(obj, key);
+
+      if (!result || hasOwn(obj, key)) {
         getSignal(key, Reflect.get(obj, key, proxy)).get();
       }
 
-      return Reflect.has(obj, key);
+      return result;
     },
 
     ownKeys(obj) {
