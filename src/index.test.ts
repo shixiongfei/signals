@@ -413,6 +413,56 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(output, [["0", "1", "2"], ["0"]]);
   });
 
+  test("test reactive array - shrink length should notify has for undefined element", () => {
+    const output: boolean[] = [];
+    const observed = signals.reactive<{ arr: (number | undefined)[] }>({
+      arr: [1, undefined],
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(1 in observed.arr);
+    });
+
+    observed.arr.length = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [true, false]);
+  });
+
+  test("test reactive array - indexOf and includes should find raw item", () => {
+    const item = { id: 1 };
+    const observed = signals.reactive({ list: [{ id: 0 }, item] });
+
+    assert.strictEqual(observed.list.indexOf(item), 1);
+    assert.strictEqual(observed.list.includes(item), true);
+  });
+
+  test("test reactive array - push inside effect should not retrigger itself", () => {
+    const observed = signals.reactive({ arr: [] as number[] });
+    let runs = 0;
+
+    const dispose = signals.effect(() => {
+      runs++;
+
+      if (runs < 5) {
+        observed.arr.push(runs);
+      }
+    });
+
+    dispose();
+
+    assert.strictEqual(runs, 1);
+  });
+
+  test("test reactive array - length assigned with same numeric string should stay number", () => {
+    const observed = signals.reactive({ arr: [1, 2, 3] });
+
+    (observed.arr as any).length = "3";
+
+    assert.strictEqual(observed.arr.length, 3);
+  });
+
   test("test reactive - prototype property should not create signal", () => {
     const proto = Object.create({ foo: 1 });
     const observed = signals.reactive(proto);
@@ -951,5 +1001,11 @@ describe("Reactive Structure Unit Test", () => {
       [undefined, undefined, []],
       [1, 2, ["foo", "bar"]],
     ]);
+  });
+
+  test("object - Date field should be usable", () => {
+    const observed = signals.reactive({ createdAt: new Date(0) });
+
+    assert.doesNotThrow(() => observed.createdAt.getTime());
   });
 });
