@@ -651,17 +651,17 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(observed.log, [0, -1]);
   });
 
-  // test("test reactive array - shrink sparse array should be fast", () => {
-  //   const observed = signals.reactive({ arr: [] as number[] });
+  test("test reactive array - shrink sparse array should be fast", () => {
+    const observed = signals.reactive({ arr: [] as number[] });
 
-  //   observed.arr[50_000_000] = 1;
+    observed.arr[50_000_000] = 1;
 
-  //   const start = Date.now();
-  //   observed.arr.length = 0;
+    const start = Date.now();
+    observed.arr.length = 0;
 
-  //   assert.strictEqual(observed.arr.length, 0);
-  //   assert.ok(Date.now() - start < 500);
-  // });
+    assert.strictEqual(observed.arr.length, 0);
+    assert.ok(Date.now() - start < 500);
+  });
 
   test("test reactive - frozen object should not throw on read", () => {
     const observed = signals.reactive(Object.freeze({ a: { x: 1 } }));

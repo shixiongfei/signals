@@ -206,12 +206,25 @@ export function reactive<T extends object>(target: T): T {
           if (Array.isArray(obj) && obj.length !== length) {
             signalMap.get("length")?.set(obj.length);
 
-            for (let i = obj.length; i < length; i++) {
-              const state = signalMap.get(String(i));
+            if (length - obj.length > signalMap.size) {
+              for (const [k, removed] of signalMap) {
+                if (typeof k === "string") {
+                  const i = Number(k);
 
-              if (state) {
-                state.set(undefined);
-                trigger(state.get);
+                  if (i >= obj.length && i < length && String(i) === k) {
+                    removed.set(undefined);
+                    trigger(removed.get);
+                  }
+                }
+              }
+            } else {
+              for (let i = obj.length; i < length; i++) {
+                const removed = signalMap.get(String(i));
+
+                if (removed) {
+                  removed.set(undefined);
+                  trigger(removed.get);
+                }
               }
             }
 
