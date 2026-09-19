@@ -463,6 +463,99 @@ describe("Reactive Unit Test", () => {
     assert.strictEqual(observed.arr.length, 3);
   });
 
+  test("test reactive array - indexOf, lastIndexOf and includes should accept raw and proxy", () => {
+    const a = { id: 0 };
+    const b = { id: 1 };
+    const observed = signals.reactive({ list: [a, b, 2] as unknown[] });
+    const proxyB = observed.list[1];
+
+    assert.strictEqual(observed.list.indexOf(b), 1);
+    assert.strictEqual(observed.list.indexOf(proxyB), 1);
+    assert.strictEqual(observed.list.lastIndexOf(b), 1);
+    assert.strictEqual(observed.list.lastIndexOf(proxyB), 1);
+    assert.strictEqual(observed.list.includes(b), true);
+    assert.strictEqual(observed.list.includes(proxyB), true);
+
+    assert.strictEqual(observed.list.indexOf(2), 2);
+    assert.strictEqual(observed.list.indexOf({ id: 1 }), -1);
+    assert.strictEqual(observed.list.includes({ id: 1 }), false);
+  });
+
+  test("test reactive array - indexOf with fromIndex should still work", () => {
+    const a = { id: 0 };
+    const observed = signals.reactive({ list: [a, a] });
+
+    assert.strictEqual(observed.list.indexOf(a, 1), 1);
+    assert.strictEqual(observed.list.indexOf(a, 2), -1);
+  });
+
+  test("array - splice with indexOf of raw item should remove the right item", () => {
+    const a = { id: 0 };
+    const b = { id: 1 };
+    const observed = signals.reactive({ list: [a, b] });
+
+    observed.list.splice(observed.list.indexOf(a), 1);
+
+    assert.strictEqual(observed.list.length, 1);
+    assert.strictEqual(observed.list[0].id, 1);
+  });
+
+  test("test reactive array - indexOf with raw item should be tracked", () => {
+    const b = { id: 1 };
+    const output: number[] = [];
+    const observed = signals.reactive({ list: [{ id: 0 }, b] });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.list.indexOf(b));
+    });
+
+    observed.list.unshift({ id: 9 });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 2]);
+  });
+
+  test("test reactive array - sort and reverse should notify index readers", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ arr: [3, 1, 2] });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr[0]);
+    });
+
+    observed.arr.sort();
+    observed.arr.reverse();
+
+    dispose();
+
+    assert.deepStrictEqual(output, [3, 1, 3]);
+  });
+
+  test("test reactive array - for...of should be tracked", () => {
+    const output: number[][] = [];
+    const observed = signals.reactive({ arr: [1, 2] });
+
+    const dispose = signals.effect(() => {
+      const items: number[] = [];
+
+      for (const item of observed.arr) {
+        items.push(item);
+      }
+
+      output.push(items);
+    });
+
+    observed.arr.push(3);
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [1, 2],
+      [1, 2, 3],
+    ]);
+  });
+
   test("test reactive - prototype property should not create signal", () => {
     const proto = Object.create({ foo: 1 });
     const observed = signals.reactive(proto);
@@ -1003,9 +1096,44 @@ describe("Reactive Structure Unit Test", () => {
     ]);
   });
 
-  test("object - Date field should be usable", () => {
-    const observed = signals.reactive({ createdAt: new Date(0) });
+  test("Date, Map, Set and RegExp should be stored raw", () => {
+    const d = new Date(0);
+    const m = new Map([[1, 2]]);
+    const s = new Set([1]);
+    const r = /a/;
+    const observed = signals.reactive({ d, m, s, r });
 
-    assert.doesNotThrow(() => observed.createdAt.getTime());
+    assert.strictEqual(observed.d, d);
+    assert.strictEqual(observed.m, m);
+    assert.strictEqual(observed.s, s);
+    assert.strictEqual(observed.r, r);
+
+    assert.strictEqual(observed.d.getTime(), 0);
+    assert.strictEqual(observed.m.get(1), 2);
+    assert.strictEqual(observed.s.has(1), true);
+    assert.strictEqual(observed.r.test("a"), true);
+  });
+
+  test("raw object inside array should be stored raw", () => {
+    const d = new Date(0);
+    const observed = signals.reactive({ list: [d] });
+
+    assert.strictEqual(observed.list[0], d);
+    assert.strictEqual(observed.list.indexOf(d), 0);
+  });
+
+  test("replacing a Date field should still notify", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ d: new Date(0) });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.d.getTime());
+    });
+
+    observed.d = new Date(5);
+
+    dispose();
+
+    assert.deepStrictEqual(output, [0, 5]);
   });
 });

@@ -34,8 +34,18 @@ const arrayMutations = new Set<PropertyKey>([
   "copyWithin",
 ]);
 
+const arraySearches = new Set<PropertyKey>([
+  "indexOf",
+  "lastIndexOf",
+  "includes",
+]);
+
 const isBuiltInSymbol = (key: PropertyKey) =>
   typeof key === "symbol" && builtInSymbols.has(key);
+
+const isProxiable = (value: unknown) =>
+  Array.isArray(value) ||
+  Object.prototype.toString.call(value) === "[object Object]";
 
 const isObject = (value: unknown) =>
   value !== null && typeof value === "object";
@@ -45,6 +55,8 @@ const isReactive = (value: unknown) =>
 
 const hasOwn = (obj: object, key: PropertyKey) =>
   Object.prototype.hasOwnProperty.call(obj, key);
+
+const wrap = (value: any) => (isProxiable(value) ? reactive(value) : value);
 
 export function reactive<T extends object>(target: T): T {
   if (!isObject(target)) {
@@ -60,9 +72,7 @@ export function reactive<T extends object>(target: T): T {
   }
 
   const signalMap = new Map<PropertyKey, Signal<any>>();
-  const mutatorMap = new Map<PropertyKey, Function>();
-
-  const wrap = <T>(value: T) => (isObject(value) ? reactive(value) : value);
+  const functionMap = new Map<PropertyKey, Function>();
 
   const getSignal = <T>(key: PropertyKey, initial: T): Signal<T> => {
     let state = signalMap.get(key);
@@ -90,20 +100,51 @@ export function reactive<T extends object>(target: T): T {
       }
 
       if (!hasOwn(obj, key)) {
-        if (Array.isArray(obj) && arrayMutations.has(key)) {
-          let fn = mutatorMap.get(key);
+        if (Array.isArray(obj)) {
+          if (arrayMutations.has(key)) {
+            let fn = functionMap.get(key);
 
-          if (!fn) {
-            const method = Reflect.get(obj, key, receiver) as Function;
+            if (!fn) {
+              const method = Reflect.get(obj, key, receiver) as Function;
 
-            fn = (...args: any[]) => {
-              return batch(() => Reflect.apply(method, receiver, args));
-            };
+              fn = (...args: any[]) => {
+                return batch(() => Reflect.apply(method, receiver, args));
+              };
 
-            mutatorMap.set(key, fn);
+              functionMap.set(key, fn);
+            }
+
+            return fn;
           }
 
-          return fn;
+          if (arraySearches.has(key)) {
+            let fn = functionMap.get(key);
+
+            if (!fn) {
+              const method = Reflect.get(obj, key, receiver) as Function;
+
+              fn = (...args: any[]) => {
+                let result = Reflect.apply(method, receiver, args);
+
+                if (result === -1 || result === false) {
+                  const proxied = proxyMap.get(args[0]);
+
+                  if (proxied) {
+                    result = Reflect.apply(method, receiver, [
+                      proxied,
+                      ...args.slice(1),
+                    ]);
+                  }
+                }
+
+                return result;
+              };
+
+              functionMap.set(key, fn);
+            }
+
+            return fn;
+          }
         }
 
         if (key in obj) {
@@ -194,13 +235,13 @@ export function reactive<T extends object>(target: T): T {
 
           if (state) {
             state.set(undefined);
-
-            if (hadOwn && !hasOwn(obj, key)) {
-              trigger(state.get);
-            }
           }
 
           if (hadOwn) {
+            if (state) {
+              trigger(state.get);
+            }
+
             triggerIterate();
           }
         }
