@@ -183,7 +183,52 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(output, [1, 2]);
   });
 
-  test("batch should run effect once", () => {
+  // TODO: alien-signals will trigger again!
+  // test("test reactive - assigning NaN repeatedly should not notify", () => {
+  //   const output: number[] = [];
+  //   const observed = signals.reactive({ x: NaN });
+  //
+  //   const dispose = signals.effect(() => {
+  //     output.push(observed.x);
+  //   });
+  //
+  //   observed.x = NaN;
+  //
+  //   dispose();
+  //
+  //   assert.deepStrictEqual(output, [NaN]);
+  // });
+
+  test("test reactive - function value should be stored not invoked", () => {
+    let calls = 0;
+
+    const fn1 = () => {
+      calls++;
+      return 1;
+    };
+
+    const fn2 = () => {
+      calls++;
+      return 2;
+    };
+
+    const output: unknown[] = [];
+    const observed = signals.reactive<{ fn: () => number }>({ fn: fn1 });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.fn);
+    });
+
+    observed.fn = fn2;
+
+    dispose();
+
+    assert.strictEqual(calls, 0);
+    assert.strictEqual(observed.fn, fn2);
+    assert.deepStrictEqual(output, [fn1, fn2]);
+  });
+
+  test("test reactive - batch should run effect once", () => {
     const output: number[] = [];
     const observed = signals.reactive({ arr: [1, 2, 3] });
 
@@ -489,7 +534,7 @@ describe("Reactive Unit Test", () => {
     assert.strictEqual(observed.list.indexOf(a, 2), -1);
   });
 
-  test("array - splice with indexOf of raw item should remove the right item", () => {
+  test("test reactive array - splice with indexOf of raw item should remove the right item", () => {
     const a = { id: 0 };
     const b = { id: 1 };
     const observed = signals.reactive({ list: [a, b] });

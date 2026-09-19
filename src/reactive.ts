@@ -44,8 +44,9 @@ const isBuiltInSymbol = (key: PropertyKey) =>
   typeof key === "symbol" && builtInSymbols.has(key);
 
 const isProxiable = (value: unknown) =>
-  Array.isArray(value) ||
-  Object.prototype.toString.call(value) === "[object Object]";
+  isObject(value) &&
+  (Array.isArray(value) ||
+    Object.prototype.toString.call(value) === "[object Object]");
 
 const isObject = (value: unknown) =>
   value !== null && typeof value === "object";
@@ -178,7 +179,8 @@ export function reactive<T extends object>(target: T): T {
           const state = signalMap.get(key);
 
           if (state) {
-            state.set(wrap(value));
+            const wrapped = wrap(value);
+            state.set(() => wrapped);
           }
 
           if (!hadOwn && !hadKey) {
