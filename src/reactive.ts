@@ -130,10 +130,16 @@ export function reactive<T extends object>(target: T): T {
                   const proxied = proxyMap.get(args[0]);
 
                   if (proxied) {
-                    result = Reflect.apply(method, receiver, [
-                      proxied,
-                      ...args.slice(1),
-                    ]);
+                    const argsLen = args.length;
+                    const proxiedArgs = new Array(argsLen);
+
+                    proxiedArgs[0] = proxied;
+
+                    for (let i = 1; i < argsLen; i++) {
+                      proxiedArgs[i] = args[i];
+                    }
+
+                    result = Reflect.apply(method, receiver, proxiedArgs);
                   }
                 }
 
