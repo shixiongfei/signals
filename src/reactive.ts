@@ -111,7 +111,14 @@ export function reactive<T extends object>(target: T): T {
         }
       }
 
-      return getSignal(key, Reflect.get(obj, key, receiver)).get();
+      let state = signalMap.get(key);
+
+      if (!state) {
+        state = signal(wrap(Reflect.get(obj, key, receiver)));
+        signalMap.set(key, state);
+      }
+
+      return state.get();
     },
 
     set(obj, key, value, receiver) {
@@ -185,7 +192,14 @@ export function reactive<T extends object>(target: T): T {
       const result = Reflect.has(obj, key);
 
       if (!result || hasOwn(obj, key)) {
-        getSignal(key, Reflect.get(obj, key, proxy)).get();
+        let state = signalMap.get(key);
+
+        if (!state) {
+          state = signal(wrap(Reflect.get(obj, key, proxy)));
+          signalMap.set(key, state);
+        }
+
+        state.get();
       }
 
       return result;
