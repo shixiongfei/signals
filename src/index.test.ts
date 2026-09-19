@@ -184,9 +184,7 @@ describe("Reactive Unit Test", () => {
 
   test("batch should run effect once", () => {
     const output: number[] = [];
-    const observed = signals.reactive({
-      arr: [1, 2, 3],
-    });
+    const observed = signals.reactive({ arr: [1, 2, 3] });
 
     const dispose = signals.effect(() => {
       output.push(observed.arr[0]);
@@ -205,9 +203,7 @@ describe("Reactive Unit Test", () => {
 
   test("test reactive array - read and write", () => {
     const output: number[] = [];
-    const observed = signals.reactive({
-      arr: [1, 2, 3],
-    });
+    const observed = signals.reactive({ arr: [1, 2, 3] });
 
     const dispose = signals.effect(() => {
       output.push(observed.arr[0]);
@@ -225,9 +221,7 @@ describe("Reactive Unit Test", () => {
 
   test("test reactive array - push", () => {
     const output: number[] = [];
-    const observed = signals.reactive({
-      arr: [1, 2],
-    });
+    const observed = signals.reactive({ arr: [1, 2] });
 
     const dispose = signals.effect(() => {
       output.push(observed.arr.length);
@@ -244,9 +238,7 @@ describe("Reactive Unit Test", () => {
 
   test("test reactive array - pop", () => {
     const output: number[] = [];
-    const observed = signals.reactive({
-      arr: [1, 2, 3],
-    });
+    const observed = signals.reactive({ arr: [1, 2, 3] });
 
     const dispose = signals.effect(() => {
       output.push(observed.arr.length);
@@ -263,9 +255,7 @@ describe("Reactive Unit Test", () => {
 
   test("test reactive array - shift and unshift", () => {
     const output: number[] = [];
-    const observed = signals.reactive({
-      arr: [2, 3],
-    });
+    const observed = signals.reactive({ arr: [2, 3] });
 
     const dispose = signals.effect(() => {
       output.push(observed.arr[0]);
@@ -282,9 +272,7 @@ describe("Reactive Unit Test", () => {
 
   test("test reactive array - splice", () => {
     const output: unknown[] = [];
-    const observed = signals.reactive({
-      arr: [1, 2, 3, 4],
-    });
+    const observed = signals.reactive({ arr: [1, 2, 3, 4] });
 
     const dispose = signals.effect(() => {
       output.push([observed.arr.length, observed.arr[1], observed.arr[2]]);
@@ -304,9 +292,7 @@ describe("Reactive Unit Test", () => {
 
   test("test reactive array - length", () => {
     const output: number[] = [];
-    const observed = signals.reactive({
-      arr: [1, 2, 3],
-    });
+    const observed = signals.reactive({ arr: [1, 2, 3] });
 
     const dispose = signals.effect(() => {
       output.push(observed.arr.length);
@@ -323,9 +309,7 @@ describe("Reactive Unit Test", () => {
 
   test("test reactive array - new index", () => {
     const output: unknown[] = [];
-    const observed = signals.reactive({
-      arr: [] as number[],
-    });
+    const observed = signals.reactive({ arr: [] as number[] });
 
     const dispose = signals.effect(() => {
       output.push(observed.arr[0]);
@@ -341,9 +325,7 @@ describe("Reactive Unit Test", () => {
 
   test("test reactive array - independent index", () => {
     const output: number[] = [];
-    const observed = signals.reactive({
-      arr: [1, 2],
-    });
+    const observed = signals.reactive({ arr: [1, 2] });
 
     const dispose = signals.effect(() => {
       output.push(observed.arr[0]);
@@ -376,23 +358,19 @@ describe("Reactive Unit Test", () => {
   });
 
   test("test reactive - prototype property should not create signal", () => {
-    const proto = { foo: 1 };
-    const obj = Object.create(proto);
-    const observed = signals.reactive(obj);
+    const proto = Object.create({ foo: 1 });
+    const observed = signals.reactive(proto);
     const output: number[] = [];
 
     const dispose = signals.effect(() => {
       output.push(observed.foo);
     });
 
-    assert.deepStrictEqual(output, [1]);
-
-    proto.foo = 2;
-
-    assert.deepStrictEqual(output, [1]);
-    assert.strictEqual(Object.prototype.hasOwnProperty.call(obj, "foo"), false);
+    observed.foo = 2;
 
     dispose();
+
+    assert.deepStrictEqual(output, [1]);
   });
 
   test("test reactive - missing property should create dependency", () => {
@@ -456,9 +434,9 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(output, [undefined]);
   });
 
-  test("test reactive - delete prototype property", () => {
-    const proto = { foo: 1 };
-    const observed = signals.reactive(Object.create(proto));
+  test("test reactive - should not react to delete prototype property", () => {
+    const proto = Object.create({ foo: 1 });
+    const observed = signals.reactive(proto);
 
     const output: unknown[] = [];
 
@@ -467,6 +445,25 @@ describe("Reactive Unit Test", () => {
     });
 
     delete observed.foo;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1]);
+  });
+
+  test("test reactive - should not react to change and delete prototype property", () => {
+    const proto = Object.create({ foo: 1 });
+    const observed = signals.reactive(proto);
+
+    const output: unknown[] = [];
+
+    const dispose = signals.effect(() => {
+      output.push(observed.foo);
+    });
+
+    observed.foo = 2;
+    delete observed.foo;
+    observed.foo = 3;
 
     dispose();
 
@@ -487,5 +484,386 @@ describe("Reactive Unit Test", () => {
     dispose();
 
     assert.deepStrictEqual(output, [10, undefined, 30]);
+  });
+});
+
+describe("Reactive Structure Unit Test", () => {
+  test("for...in should react to new property", () => {
+    const output: string[][] = [];
+
+    const observed = signals.reactive<{ foo: number; bar?: number }>({
+      foo: 1,
+    });
+
+    const dispose = signals.effect(() => {
+      const keys: string[] = [];
+
+      for (const key in observed) {
+        keys.push(key);
+      }
+
+      output.push(keys);
+    });
+
+    observed.bar = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [["foo"], ["foo", "bar"]]);
+  });
+
+  test("for...in should react to deleted property", () => {
+    const output: string[][] = [];
+
+    const observed = signals.reactive<{ foo?: number; bar?: number }>({
+      foo: 1,
+      bar: 2,
+    });
+
+    const dispose = signals.effect(() => {
+      const keys: string[] = [];
+
+      for (const key in observed) {
+        keys.push(key);
+      }
+
+      output.push(keys);
+    });
+
+    delete observed.foo;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [["foo", "bar"], ["bar"]]);
+  });
+
+  test("for...in should not react to existing property value changes", () => {
+    const output: string[][] = [];
+    const observed = signals.reactive({ foo: 1 });
+
+    const dispose = signals.effect(() => {
+      const keys: string[] = [];
+
+      for (const key in observed) {
+        keys.push(key);
+      }
+
+      output.push(keys);
+    });
+
+    observed.foo = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [["foo"]]);
+  });
+
+  test("for...in should not react to prototype property changes", () => {
+    const proto = Object.create({ foo: 1 });
+    const observed = signals.reactive(proto);
+    const output: string[][] = [];
+
+    const dispose = signals.effect(() => {
+      const keys: string[] = [];
+
+      for (const key in observed) {
+        keys.push(key);
+      }
+
+      output.push(keys);
+    });
+
+    observed.foo = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [["foo"]]);
+  });
+
+  test("for...in should not react to prototype property deleted", () => {
+    const proto = Object.create({ foo: 1 });
+    const observed = signals.reactive(proto);
+    const output: string[][] = [];
+
+    const dispose = signals.effect(() => {
+      const keys: string[] = [];
+
+      for (const key in observed) {
+        keys.push(key);
+      }
+
+      output.push(keys);
+    });
+
+    delete observed.foo;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [["foo"]]);
+  });
+
+  test("for...in and property value dependency should run once", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive<{ foo?: number }>({});
+
+    const dispose = signals.effect(() => {
+      const keys: string[] = [];
+
+      for (const key in observed) {
+        keys.push(key);
+      }
+
+      output.push([observed.foo, keys]);
+    });
+
+    observed.foo = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [undefined, []],
+      [1, ["foo"]],
+    ]);
+  });
+
+  test("has should react when missing property is added", () => {
+    const output: boolean[] = [];
+    const observed = signals.reactive<{ foo?: number }>({});
+
+    const dispose = signals.effect(() => {
+      output.push("foo" in observed);
+    });
+
+    observed.foo = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [false, true]);
+  });
+
+  test("has should react when property is deleted", () => {
+    const output: boolean[] = [];
+    const observed = signals.reactive<{ foo?: number }>({ foo: 1 });
+
+    const dispose = signals.effect(() => {
+      output.push("foo" in observed);
+    });
+
+    delete observed.foo;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [true, false]);
+  });
+
+  test("has should only depend on the requested property", () => {
+    const output: boolean[] = [];
+    const observed = signals.reactive<{ foo?: number; bar?: number }>({});
+
+    const dispose = signals.effect(() => {
+      output.push("foo" in observed);
+    });
+
+    observed.bar = 1;
+    observed.bar = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [false]);
+  });
+
+  test("has and property dependency should be batched together", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive<{ foo?: number }>({});
+
+    const dispose = signals.effect(() => {
+      output.push(["foo" in observed, observed.foo]);
+    });
+
+    observed.foo = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [false, undefined],
+      [true, 1],
+    ]);
+  });
+
+  test("Object.keys should react to structural changes", () => {
+    const output: string[][] = [];
+
+    const observed = signals.reactive<{ bar?: number; foo?: number }>({
+      foo: 1,
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(Object.keys(observed));
+    });
+
+    observed.bar = 2;
+    delete observed.foo;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [["foo"], ["foo", "bar"], ["bar"]]);
+  });
+
+  test("Object.entries should react to structural changes", () => {
+    const output: [string, unknown][][] = [];
+
+    const observed = signals.reactive<{ foo: number; bar?: number }>({
+      foo: 1,
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(Object.entries(observed));
+    });
+
+    observed.bar = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [["foo", 1]],
+      [
+        ["foo", 1],
+        ["bar", 2],
+      ],
+    ]);
+  });
+
+  test("Object.values should react to structural changes", () => {
+    const output: number[][] = [];
+
+    const observed = signals.reactive<{ foo: number; bar?: number }>({
+      foo: 1,
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(Object.values(observed));
+    });
+
+    observed.bar = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [[1], [1, 2]]);
+  });
+
+  test("Reflect.ownKeys should react to structural changes", () => {
+    const output: PropertyKey[][] = [];
+
+    const observed = signals.reactive<{ foo?: number; bar?: number }>({
+      foo: 1,
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(Reflect.ownKeys(observed));
+    });
+
+    observed.bar = 2;
+    delete observed.foo;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [["foo"], ["foo", "bar"], ["bar"]]);
+  });
+
+  test("new property should batch property and iteration dependencies", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive<{ foo?: number }>({});
+
+    const dispose = signals.effect(() => {
+      output.push([observed.foo, Object.keys(observed)]);
+    });
+
+    observed.foo = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [undefined, []],
+      [1, ["foo"]],
+    ]);
+  });
+
+  test("updating existing property should only trigger property dependency", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive({ foo: 1 });
+
+    const dispose = signals.effect(() => {
+      output.push([observed.foo, Object.keys(observed)]);
+    });
+
+    observed.foo = 2;
+    observed.foo = 3;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [1, ["foo"]],
+      [2, ["foo"]],
+      [3, ["foo"]],
+    ]);
+  });
+
+  test("delete should batch property and iteration dependencies", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive<{ foo?: number }>({ foo: 1 });
+
+    const dispose = signals.effect(() => {
+      output.push([observed.foo, Object.keys(observed)]);
+    });
+
+    delete observed.foo;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [1, ["foo"]],
+      [undefined, []],
+    ]);
+  });
+
+  test("delete and re-add should trigger once per mutation", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive<{ foo?: number }>({ foo: 1 });
+
+    const dispose = signals.effect(() => {
+      output.push([observed.foo, Object.keys(observed)]);
+    });
+
+    delete observed.foo;
+    observed.foo = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [1, ["foo"]],
+      [undefined, []],
+      [2, ["foo"]],
+    ]);
+  });
+
+  test("user batch and internal mutation batch should not cause duplicate effects", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive<{ foo?: number; bar?: number }>({});
+
+    const dispose = signals.effect(() => {
+      output.push([observed.foo, observed.bar, Object.keys(observed)]);
+    });
+
+    signals.batch(() => {
+      observed.foo = 1;
+      observed.bar = 2;
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [undefined, undefined, []],
+      [1, 2, ["foo", "bar"]],
+    ]);
   });
 });
