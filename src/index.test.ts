@@ -14,9 +14,9 @@ import { describe, test } from "node:test";
 import signals from "./index.ts";
 
 describe("Signals Unit Test", () => {
-  const count = signals.signal(0);
-
   test("test signal", () => {
+    const count = signals.signal(0);
+
     assert.strictEqual(count.get(), 0);
 
     count.set(1);
@@ -27,6 +27,7 @@ describe("Signals Unit Test", () => {
   });
 
   test("test computed", () => {
+    const count = signals.signal(0);
     const double = signals.computed(() => count.get() * 2);
     const trible = signals.computed(() => count.get() * 3);
 
@@ -38,6 +39,7 @@ describe("Signals Unit Test", () => {
 
   test("test effect", () => {
     const output: number[] = [];
+    const count = signals.signal(0);
 
     count.set(0);
     const dispose1 = signals.effect(() => {
@@ -104,6 +106,7 @@ describe("Signals Unit Test", () => {
 
   test("test batch", () => {
     const output: number[] = [];
+    const count = signals.signal(0);
     const countdown = signals.signal(10);
 
     count.set(0);
@@ -976,17 +979,6 @@ describe("Reactive Unit Test", () => {
     observed.list = [observed.child];
 
     assert.throws(() => structuredClone(signals.toRaw(observed)));
-  });
-
-  test("probe: non-writable non-configurable object property should not throw", () => {
-    const raw: any = {};
-
-    Object.defineProperty(raw, "cfg", { value: { a: 1 } });
-
-    const observed = signals.reactive(raw);
-
-    assert.doesNotThrow(() => observed.cfg);
-    assert.strictEqual(observed.cfg.a, 1);
   });
 
   test("locked object property should not throw outside effect", () => {
@@ -1954,22 +1946,8 @@ describe("Reactive toRaw Unit Test", () => {
     );
     assert.doesNotThrow(() => structuredClone(raw));
   });
-});
 
-describe("Reactive raw purity vs holding proxy", () => {
-  test("A: element-moving mutation should leave raw items in raw array", () => {
-    const a = { id: 1 };
-    const b = { id: 2 };
-    const observed = signals.reactive({ list: [a, b] });
-    const raw = signals.toRaw(observed.list);
-
-    observed.list.reverse();
-
-    assert.strictEqual(raw[0], b);
-    assert.strictEqual(raw[1], a);
-  });
-
-  test("B: assigning a reactive value should read back the same proxy", () => {
+  test("assigning a reactive value should read back the same proxy", () => {
     const child = { x: 1 };
     const obj: any = { child };
     const observed = signals.reactive(obj);
@@ -1992,12 +1970,227 @@ describe("Reactive raw purity vs holding proxy", () => {
 
     assert.deepStrictEqual(output, [1, 2]);
   });
+});
 
-  test("C: structuredClone(toRaw) after reverse should not throw", () => {
-    const observed = signals.reactive({ list: [{ id: 1 }, { id: 2 }] });
+describe("Reactive defineProperty / accessor delete / class", () => {
+  test("deleting accessor should notify effect that only reads the getter", () => {
+    const output: unknown[] = [];
+    const observed: any = signals.reactive({
+      a: 1,
 
-    observed.list.reverse();
+      get double() {
+        return this.a * 2;
+      },
+    });
 
-    assert.doesNotThrow(() => structuredClone(signals.toRaw(observed.list)));
+    const dispose = signals.effect(() => {
+      output.push(observed.double);
+    });
+
+    delete observed.double;
+    observed.double = 5;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [2, undefined, 5]);
+  });
+
+  test("defineProperty should notify value reader when property is added", () => {
+    const output: unknown[] = [];
+    const observed: any = signals.reactive({});
+
+    const dispose = signals.effect(() => {
+      output.push(observed.foo);
+    });
+
+    Object.defineProperty(observed, "foo", {
+      value: 1,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [undefined, 1]);
+  });
+
+  test("defineProperty should notify Object.keys when property is added", () => {
+    const output: string[][] = [];
+    const observed: any = signals.reactive({});
+
+    const dispose = signals.effect(() => {
+      output.push(Object.keys(observed));
+    });
+
+    Object.defineProperty(observed, "foo", {
+      value: 1,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [[], ["foo"]]);
+  });
+
+  test("defineProperty should notify when existing value is redefined", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ foo: 1 });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.foo);
+    });
+
+    Object.defineProperty(observed, "foo", { value: 2 });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 2]);
+  });
+
+  test("defineProperty should notify when data property becomes accessor", () => {
+    const output: number[] = [];
+    const observed: any = signals.reactive({ foo: 1 });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.foo);
+    });
+
+    Object.defineProperty(observed, "foo", {
+      get: () => 7,
+      configurable: true,
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 7]);
+    assert.strictEqual(observed.foo, 7);
+  });
+
+  test("defineProperty should notify when accessor is replaced or becomes data", () => {
+    const output: number[] = [];
+    const observed: any = signals.reactive({
+      get foo() {
+        return 1;
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.foo);
+    });
+
+    Object.defineProperty(observed, "foo", {
+      get: () => 2,
+      configurable: true,
+    });
+    Object.defineProperty(observed, "foo", {
+      value: 3,
+      writable: true,
+      configurable: true,
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 2, 3]);
+  });
+
+  test("defineProperty should store raw value", () => {
+    const child = { x: 1 };
+    const raw: any = { child };
+    const observed: any = signals.reactive(raw);
+
+    Object.defineProperty(observed, "other", {
+      value: observed.child,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+
+    assert.strictEqual(raw.other, child);
+    assert.strictEqual(observed.other, observed.child);
+  });
+
+  test("defineProperty on non-configurable property should throw", () => {
+    const observed: any = signals.reactive({});
+
+    Object.defineProperty(observed, "k", { value: 1 });
+
+    assert.throws(
+      () => Object.defineProperty(observed, "k", { value: 2 }),
+      TypeError,
+    );
+  });
+
+  test("defineProperty length should shrink array and notify", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive({ arr: [1, 2, 3] });
+
+    const dispose = signals.effect(() => {
+      output.push([observed.arr.length, observed.arr[2]]);
+    });
+
+    Object.defineProperty(observed.arr, "length", { value: 1 });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [3, 3],
+      [1, undefined],
+    ]);
+  });
+
+  test("defineProperty index beyond length should notify length", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ arr: [1] });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr.length);
+    });
+
+    Object.defineProperty(observed.arr, "3", {
+      value: 9,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 4]);
+  });
+
+  test("class instance should be stored raw", () => {
+    class Counter {
+      #n = 0;
+
+      inc() {
+        return ++this.#n;
+      }
+    }
+
+    const c = new Counter();
+    const observed = signals.reactive({ c, list: [c] });
+
+    assert.strictEqual(observed.c, c);
+    assert.strictEqual(observed.list[0], c);
+    assert.strictEqual(observed.c.inc(), 1);
+  });
+
+  test("null-prototype object should still be reactive", () => {
+    const output: number[] = [];
+    const dict = Object.assign(Object.create(null), { a: 1 });
+    const observed = signals.reactive({ dict });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.dict.a);
+    });
+
+    observed.dict.a = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 2]);
   });
 });

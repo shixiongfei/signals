@@ -46,10 +46,14 @@ const isBuiltInSymbol = (key: PropertyKey) =>
 const isObject = (value: unknown) =>
   value !== null && typeof value === "object";
 
+const isPlainObject = (value: object) => {
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
+
 const isProxiable = (value: unknown) =>
   isObject(value) &&
-  (Array.isArray(value) ||
-    Object.prototype.toString.call(value) === "[object Object]") &&
+  (Array.isArray(value) || isPlainObject(value)) &&
   !Object.isFrozen(value);
 
 const isReactive = (value: unknown) =>
@@ -115,6 +119,36 @@ export function reactive<T extends object>(target: T): T {
 
   const triggerIterate = () => {
     signalMap.get(ITERATE)?.set((value: number) => value + 1);
+  };
+
+  const syncLength = (obj: any[], length: number) => {
+    signalMap.get("length")?.set(obj.length);
+
+    if (length - obj.length > signalMap.size) {
+      for (const [k, removed] of signalMap) {
+        if (typeof k === "string") {
+          const i = Number(k);
+
+          if (i >= obj.length && i < length && String(i) === k) {
+            removed.set(undefined);
+            trigger(removed.get);
+          }
+        }
+      }
+    } else {
+      for (let i = obj.length; i < length; i++) {
+        const removed = signalMap.get(String(i));
+
+        if (removed) {
+          removed.set(undefined);
+          trigger(removed.get);
+        }
+      }
+    }
+
+    if (obj.length < length) {
+      triggerIterate();
+    }
   };
 
   const proxy = new Proxy(target, {
@@ -190,7 +224,15 @@ export function reactive<T extends object>(target: T): T {
           return value;
         }
 
-        if (!tracked || kind === ACCESSOR) {
+        if (kind === ACCESSOR) {
+          if (tracked) {
+            getSignal(ITERATE, 0).get();
+          }
+
+          return wrap(value);
+        }
+
+        if (!tracked) {
           return wrap(value);
         }
 
@@ -250,33 +292,7 @@ export function reactive<T extends object>(target: T): T {
           }
 
           if (Array.isArray(obj) && obj.length !== length) {
-            signalMap.get("length")?.set(obj.length);
-
-            if (length - obj.length > signalMap.size) {
-              for (const [k, removed] of signalMap) {
-                if (typeof k === "string") {
-                  const i = Number(k);
-
-                  if (i >= obj.length && i < length && String(i) === k) {
-                    removed.set(undefined);
-                    trigger(removed.get);
-                  }
-                }
-              }
-            } else {
-              for (let i = obj.length; i < length; i++) {
-                const removed = signalMap.get(String(i));
-
-                if (removed) {
-                  removed.set(undefined);
-                  trigger(removed.get);
-                }
-              }
-            }
-
-            if (obj.length < length) {
-              triggerIterate();
-            }
+            syncLength(obj, length);
           }
         }
 
@@ -360,6 +376,60 @@ export function reactive<T extends object>(target: T): T {
       }
 
       return Reflect.getOwnPropertyDescriptor(obj, key);
+    },
+
+    defineProperty(obj, key, desc) {
+      if (writing || isBuiltInSymbol(key)) {
+        return Reflect.defineProperty(obj, key, desc);
+      }
+
+      return batch(() => {
+        const before = Object.getOwnPropertyDescriptor(obj, key);
+        const hadKey = key in obj;
+        const length = Array.isArray(obj) ? obj.length : 0;
+
+        const ok = Reflect.defineProperty(
+          obj,
+          key,
+          "value" in desc ? { ...desc, value: toRaw(desc.value) } : desc,
+        );
+
+        if (ok) {
+          const after = Object.getOwnPropertyDescriptor(obj, key)!;
+          const state = signalMap.get(key);
+
+          if (state) {
+            if ("value" in after) {
+              const wrapped = wrap(after.value);
+              state.set(() => wrapped);
+
+              if (!before) {
+                trigger(state.get);
+              }
+            } else {
+              trigger(state.get);
+              signalMap.delete(key);
+            }
+          }
+
+          const changed =
+            before !== undefined &&
+            (before.get !== after.get ||
+              before.set !== after.set ||
+              before.enumerable !== after.enumerable ||
+              "value" in before !== "value" in after);
+
+          if (before ? changed : !hadKey) {
+            triggerIterate();
+          }
+
+          if (Array.isArray(obj) && obj.length !== length) {
+            syncLength(obj, length);
+          }
+        }
+
+        return ok;
+      });
     },
   });
 
