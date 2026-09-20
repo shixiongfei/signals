@@ -1,6 +1,6 @@
 {
   "name": "@shidev/signals",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A very simple alien-signals wrapper, designed for simpler use only.",
   "type": "module",
   "main": "./dist/index.js",
