@@ -2244,3 +2244,134 @@ describe("Reactive defineProperty / accessor delete / class", () => {
     assert.strictEqual(observed.list[0].y, 2);
   });
 });
+
+describe("Reactive differential test", () => {
+  const snap = (v: any): any => {
+    if (Array.isArray(v)) {
+      const out: any[] = [];
+
+      for (let i = 0; i < v.length; i++) {
+        out.push(snap(v[i]));
+      }
+
+      return out;
+    }
+
+    if (v !== null && typeof v === "object") {
+      const out: any = {};
+
+      for (const k of Object.keys(v)) {
+        out[k] = snap(v[k]);
+      }
+
+      return out;
+    }
+
+    return v;
+  };
+
+  const isNode = (v: any) => v !== null && typeof v === "object";
+
+  const make = (kind: number, n: number): any =>
+    kind === 0 ? n : kind === 1 ? { a: n } : [n, n + 1];
+
+  const run = (seed: number, steps: number) => {
+    let s = seed;
+    const rand = () => (s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+    const int = (n: number) => Math.floor(rand() * n);
+
+    const build = () => ({
+      o: { x: 1, list: [1, 2, 3] },
+      arr: [{ a: 1 }, 2, [3]],
+    });
+    const mirror: any = build();
+    const observed: any = signals.reactive(build());
+
+    let latest: any;
+
+    const dispose = signals.effect(() => {
+      latest = snap(observed);
+    });
+
+    for (let step = 0; step < steps; step++) {
+      const path: (string | number)[] = [];
+      let m: any = mirror;
+
+      for (;;) {
+        const keys: (string | number)[] = Array.isArray(m)
+          ? m.map((_: any, i: number) => i).filter((i: number) => isNode(m[i]))
+          : Object.keys(m).filter((k) => isNode(m[k]));
+
+        if (keys.length === 0 || rand() < 0.4) break;
+
+        const k = keys[int(keys.length)];
+        path.push(k);
+        m = m[k];
+      }
+
+      let p: any = observed;
+
+      for (const k of path) {
+        p = p[k];
+      }
+
+      const kind = int(3);
+      const n = int(100);
+      const op = int(8);
+      const idx = int(6);
+      const key = `k${int(4)}`;
+
+      const apply = (node: any) => {
+        if (Array.isArray(node)) {
+          switch (op) {
+            case 0:
+              node.push(make(kind, n));
+              break;
+            case 1:
+              node.pop();
+              break;
+            case 2:
+              node.shift();
+              break;
+            case 3:
+              node.unshift(make(kind, n));
+              break;
+            case 4:
+              node.splice(idx % (node.length + 1), 1);
+              break;
+            case 5:
+              node.reverse();
+              break;
+            case 6:
+              node.length = idx % (node.length + 1);
+              break;
+            default:
+              if (node.length > 0) {
+                node[idx % node.length] = make(kind, n);
+              }
+          }
+        } else if (op < 5) {
+          node[key] = make(kind, n);
+        } else if (op < 7) {
+          delete node[key];
+        } else {
+          node.x = make(0, n);
+        }
+      };
+
+      apply(m);
+      apply(p);
+
+      assert.deepStrictEqual(latest, snap(mirror), `seed ${seed} step ${step}`);
+      assert.deepStrictEqual(snap(observed), snap(mirror));
+    }
+
+    dispose();
+  };
+
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+    test(`random operations match native object, seed ${seed}`, () => {
+      run(seed, 500);
+    });
+  }
+});

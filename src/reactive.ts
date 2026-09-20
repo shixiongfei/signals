@@ -100,7 +100,7 @@ export function reactive<T extends object>(target: T): T {
   let functionMap: Map<PropertyKey, Function> | undefined;
   let writing = false;
 
-  const getSignal = <T>(key: PropertyKey) => {
+  const getSignal = (key: PropertyKey) => {
     let state = signalMap.get(key);
 
     if (!state) {
@@ -204,7 +204,7 @@ export function reactive<T extends object>(target: T): T {
         }
       }
 
-      let state = signalMap.get(key);
+      const state = signalMap.get(key);
 
       if (state) {
         state.get();
