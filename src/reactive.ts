@@ -399,16 +399,21 @@ export function reactive<T extends object>(target: T): T {
           const state = signalMap.get(key);
 
           if (state) {
-            if ("value" in after) {
-              const wrapped = wrap(after.value);
-              state.set(() => wrapped);
-
-              if (!before) {
+            if (state) {
+              if (
+                !("value" in after) ||
+                (!after.configurable && !after.writable)
+              ) {
                 trigger(state.get);
+                signalMap.delete(key);
+              } else {
+                const wrapped = wrap(after.value);
+                state.set(() => wrapped);
+
+                if (!before) {
+                  trigger(state.get);
+                }
               }
-            } else {
-              trigger(state.get);
-              signalMap.delete(key);
             }
           }
 

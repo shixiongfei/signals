@@ -2193,4 +2193,23 @@ describe("Reactive defineProperty / accessor delete / class", () => {
 
     assert.deepStrictEqual(output, [1, 2]);
   });
+
+  test("Object.freeze(observed) should not break reads of nested objects", () => {
+    const observed = signals.reactive({ a: { x: 1 }, list: [{ y: 2 }] });
+
+    const dispose = signals.effect(() => {
+      observed.a;
+      observed.list[0];
+    });
+
+    Object.freeze(observed);
+    Object.freeze(observed.list);
+
+    dispose();
+
+    assert.doesNotThrow(() => observed.a);
+    assert.doesNotThrow(() => observed.list[0]);
+    assert.strictEqual(observed.a.x, 1);
+    assert.strictEqual(observed.list[0].y, 2);
+  });
 });
