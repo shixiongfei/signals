@@ -186,21 +186,20 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(output, [1, 2]);
   });
 
-  // TODO: alien-signals will trigger again!
-  // test("test reactive - assigning NaN repeatedly should not notify", () => {
-  //   const output: number[] = [];
-  //   const observed = signals.reactive({ x: NaN });
-  //
-  //   const dispose = signals.effect(() => {
-  //     output.push(observed.x);
-  //   });
-  //
-  //   observed.x = NaN;
-  //
-  //   dispose();
-  //
-  //   assert.deepStrictEqual(output, [NaN]);
-  // });
+  test("test reactive - assigning NaN repeatedly should not notify", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ x: NaN });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.x);
+    });
+
+    observed.x = NaN;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [NaN]);
+  });
 
   test("test reactive - function value should be stored not invoked", () => {
     let calls = 0;
@@ -402,8 +401,40 @@ describe("Reactive Unit Test", () => {
     dispose();
 
     assert.deepStrictEqual(output, [1]);
-    assert.deepStrictEqual(observed.arr, [1]);
+    assert.deepStrictEqual(observed.arr, [1, 2]);
     assert.deepStrictEqual(obj.arr, [1, 2]);
+  });
+
+  test("read should reflect raw mutation regardless of signal existence", () => {
+    const raw = { a: 1, b: 1 };
+    const observed = signals.reactive(raw);
+
+    const dispose = signals.effect(() => {
+      observed.a;
+    });
+
+    raw.a = 2;
+    raw.b = 2;
+
+    dispose();
+
+    assert.strictEqual(observed.a, 2);
+    assert.strictEqual(observed.b, 2);
+  });
+
+  test("assigning same value should not notify", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ a: 1 });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.a);
+    });
+
+    observed.a = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1]);
   });
 
   test("test reactive array - assign at length should notify length", () => {
@@ -973,7 +1004,7 @@ describe("Reactive Unit Test", () => {
     assert.strictEqual(double.get(), 10);
   });
 
-  test("probe: proxy nested in an assigned container stays in raw", () => {
+  test("proxy nested in an assigned container stays in raw", () => {
     const observed = signals.reactive({ child: { x: 1 }, list: [] as any[] });
 
     observed.list = [observed.child];

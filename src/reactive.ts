@@ -9,7 +9,7 @@
  * https://github.com/shixiongfei/signals
  */
 
-import { batch, signal, tracking, trigger, untrack } from "./signals.ts";
+import { batch, signal, tracking, untrack } from "./signals.ts";
 import type { Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
@@ -95,34 +95,36 @@ export function reactive<T extends object>(target: T): T {
     return proxyMap.get(target) as T;
   }
 
-  const signalMap = new Map<PropertyKey, Signal<any>>();
+  const signalMap = new Map<PropertyKey, Signal<number>>();
 
   let functionMap: Map<PropertyKey, Function> | undefined;
   let writing = false;
 
-  const getSignal = <T>(key: PropertyKey, initial: T): Signal<T> => {
+  const getSignal = <T>(key: PropertyKey) => {
     let state = signalMap.get(key);
 
     if (!state) {
-      state = signal(wrap(initial));
+      state = signal(0);
       signalMap.set(key, state);
     }
 
     return state;
   };
 
+  const bump = (key: PropertyKey) => {
+    signalMap.get(key)?.set((version) => version + 1);
+  };
+
+  const triggerIterate = () => bump(ITERATE);
+
   const trackIterate = () => {
     if (tracking()) {
-      getSignal(ITERATE, 0).get();
+      getSignal(ITERATE).get();
     }
   };
 
-  const triggerIterate = () => {
-    signalMap.get(ITERATE)?.set((value: number) => value + 1);
-  };
-
   const syncLength = (obj: any[], length: number) => {
-    signalMap.get("length")?.set(obj.length);
+    bump("length");
 
     if (length - obj.length > signalMap.size) {
       for (const [k, removed] of signalMap) {
@@ -130,19 +132,13 @@ export function reactive<T extends object>(target: T): T {
           const i = Number(k);
 
           if (i >= obj.length && i < length && String(i) === k) {
-            removed.set(undefined);
-            trigger(removed.get);
+            removed.set((version) => version + 1);
           }
         }
       }
     } else {
       for (let i = obj.length; i < length; i++) {
-        const removed = signalMap.get(String(i));
-
-        if (removed) {
-          removed.set(undefined);
-          trigger(removed.get);
-        }
+        bump(String(i));
       }
     }
 
@@ -210,37 +206,37 @@ export function reactive<T extends object>(target: T): T {
 
       let state = signalMap.get(key);
 
-      if (!state) {
-        const value = Reflect.get(obj, key, receiver);
-        const tracked = tracking();
-
-        if (!tracked && !isProxiable(value)) {
-          return value;
-        }
-
-        const kind = propKind(obj, key);
-
-        if (kind === LOCKED) {
-          return value;
-        }
-
-        if (kind === ACCESSOR) {
-          if (tracked) {
-            getSignal(ITERATE, 0).get();
-          }
-
-          return wrap(value);
-        }
-
-        if (!tracked) {
-          return wrap(value);
-        }
-
-        state = signal(wrap(value));
-        signalMap.set(key, state);
+      if (state) {
+        state.get();
+        return wrap(Reflect.get(obj, key, receiver));
       }
 
-      return state.get();
+      const value = Reflect.get(obj, key, receiver);
+      const tracked = tracking();
+
+      if (!tracked && !isProxiable(value)) {
+        return value;
+      }
+
+      const kind = propKind(obj, key);
+
+      if (kind === LOCKED) {
+        return value;
+      }
+
+      if (kind === ACCESSOR) {
+        if (tracked) {
+          getSignal(ITERATE).get();
+        }
+
+        return wrap(value);
+      }
+
+      if (tracked) {
+        getSignal(key).get();
+      }
+
+      return wrap(value);
     },
 
     set(obj, key, value, receiver) {
@@ -256,6 +252,8 @@ export function reactive<T extends object>(target: T): T {
         const hadOwn = hasOwn(obj, key);
         const hadKey = key in obj;
         const length = Array.isArray(obj) ? obj.length : 0;
+        const state = signalMap.get(key);
+        const oldValue = state && hadOwn ? Reflect.get(obj, key) : undefined;
         const prev = writing;
         let ok: boolean;
 
@@ -267,27 +265,22 @@ export function reactive<T extends object>(target: T): T {
           value = Number(value);
         }
 
+        const raw = toRaw(value);
+
         writing = true;
 
         try {
-          ok = Reflect.set(obj, key, toRaw(value), receiver);
+          ok = Reflect.set(obj, key, raw, receiver);
         } finally {
           writing = prev;
         }
 
         if (ok) {
-          const state = signalMap.get(key);
-
-          if (state) {
-            const wrapped = wrap(value);
-            state.set(() => wrapped);
+          if (state && (!hadOwn || !Object.is(oldValue, raw))) {
+            bump(key);
           }
 
           if (!hadOwn && !hadKey) {
-            if (state) {
-              trigger(state.get);
-            }
-
             triggerIterate();
           }
 
@@ -309,20 +302,9 @@ export function reactive<T extends object>(target: T): T {
         const hadOwn = hasOwn(obj, key);
         const deleted = Reflect.deleteProperty(obj, key);
 
-        if (deleted) {
-          const state = signalMap.get(key);
-
-          if (state) {
-            state.set(undefined);
-          }
-
-          if (hadOwn) {
-            if (state) {
-              trigger(state.get);
-            }
-
-            triggerIterate();
-          }
+        if (deleted && hadOwn) {
+          bump(key);
+          triggerIterate();
         }
 
         return deleted;
@@ -351,12 +333,11 @@ export function reactive<T extends object>(target: T): T {
           }
 
           if (kind === ACCESSOR) {
-            getSignal(ITERATE, 0).get();
+            getSignal(ITERATE).get();
             return result;
           }
 
-          state = signal(wrap(Reflect.get(obj, key, proxy)));
-          signalMap.set(key, state);
+          state = getSignal(key);
         }
 
         state.get();
@@ -403,15 +384,14 @@ export function reactive<T extends object>(target: T): T {
               !("value" in after) ||
               (!after.configurable && !after.writable)
             ) {
-              trigger(state.get);
+              state.set((version) => version + 1);
               signalMap.delete(key);
-            } else {
-              const wrapped = wrap(after.value);
-              state.set(() => wrapped);
-
-              if (!before) {
-                trigger(state.get);
-              }
+            } else if (
+              !before ||
+              !("value" in before) ||
+              !Object.is(before.value, after.value)
+            ) {
+              state.set((version) => version + 1);
             }
           }
 
