@@ -22,6 +22,7 @@
     "signals",
     "alien-signals",
     "observe",
+    "observer",
     "reactive",
     "reactivity"
   ],
