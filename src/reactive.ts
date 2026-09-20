@@ -82,7 +82,7 @@ const propKind = (obj: object, key: PropertyKey) => {
   return !desc.configurable && !desc.writable ? LOCKED : NORMAL;
 };
 
-export function reactive<T extends object>(target: T): T {
+export function reactive<T>(target: T): T {
   if (!isObject(target) || Object.isFrozen(target)) {
     return target;
   }
