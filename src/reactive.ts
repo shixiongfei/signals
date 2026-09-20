@@ -79,7 +79,7 @@ export function reactive<T extends object>(target: T): T {
   }
 
   const signalMap = new Map<PropertyKey, Signal<any>>();
-  const functionMap = new Map<PropertyKey, Function>();
+  let functionMap: Map<PropertyKey, Function> | undefined;
 
   const getSignal = <T>(key: PropertyKey, initial: T): Signal<T> => {
     let state = signalMap.get(key);
@@ -108,6 +108,10 @@ export function reactive<T extends object>(target: T): T {
 
       if (!hasOwn(obj, key)) {
         if (Array.isArray(obj)) {
+          if (!functionMap) {
+            functionMap = new Map();
+          }
+
           if (arrayMutations.has(key)) {
             let fn = functionMap.get(key);
 
