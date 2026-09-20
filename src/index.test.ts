@@ -405,6 +405,43 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(obj.arr, [1, 2]);
   });
 
+  test("test reactive array - sort comparator inside effect should track its own dependencies", () => {
+    const observed = signals.reactive({ list: [3, 1, 2], desc: false });
+    let runs = 0;
+
+    const dispose = signals.effect(() => {
+      runs++;
+      observed.list.sort((a, b) => (observed.desc ? b - a : a - b));
+    });
+
+    assert.deepStrictEqual(signals.toRaw(observed.list), [1, 2, 3]);
+
+    observed.desc = true;
+
+    dispose();
+
+    assert.deepStrictEqual(signals.toRaw(observed.list), [3, 2, 1]);
+    assert.strictEqual(runs, 2);
+  });
+
+  test("test reactive array - callbacks of non-mutating array methods inside effect are tracked", () => {
+    const output: number[][] = [];
+    const observed = signals.reactive({ list: [1, 2, 3], factor: 1 });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.list.map((n) => n * observed.factor));
+    });
+
+    observed.factor = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [1, 2, 3],
+      [2, 4, 6],
+    ]);
+  });
+
   test("read should reflect raw mutation regardless of signal existence", () => {
     const raw = { a: 1, b: 1 };
     const observed = signals.reactive(raw);

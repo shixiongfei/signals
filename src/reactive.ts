@@ -9,7 +9,7 @@
  * https://github.com/shixiongfei/signals
  */
 
-import { batch, signal, tracking, untrack } from "./signals.ts";
+import { batch, signal, tracker, tracking, untrack } from "./signals.ts";
 import type { Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
@@ -111,8 +111,10 @@ export function reactive<T extends object>(target: T): T {
     return state;
   };
 
+  const increment = (version: number) => version + 1;
+
   const bump = (key: PropertyKey) => {
-    signalMap.get(key)?.set((version) => version + 1);
+    signalMap.get(key)?.set(increment);
   };
 
   const triggerIterate = () => bump(ITERATE);
@@ -132,7 +134,7 @@ export function reactive<T extends object>(target: T): T {
           const i = Number(k);
 
           if (i >= obj.length && i < length && String(i) === k) {
-            removed.set((version) => version + 1);
+            removed.set(increment);
           }
         }
       }
@@ -170,6 +172,14 @@ export function reactive<T extends object>(target: T): T {
               const method = Reflect.get(obj, key, receiver) as Function;
 
               fn = (...args: any[]) => {
+                const track = tracker();
+
+                if (key === "sort" && typeof args[0] === "function") {
+                  const compare = args[0];
+                  args[0] = (a: unknown, b: unknown) =>
+                    track(() => compare(a, b));
+                }
+
                 return batch(() =>
                   untrack(() => Reflect.apply(method, receiver, args)),
                 );
@@ -208,7 +218,14 @@ export function reactive<T extends object>(target: T): T {
 
       if (state) {
         state.get();
-        return wrap(Reflect.get(obj, key, receiver));
+
+        const value = Reflect.get(obj, key, receiver);
+
+        if (!Object.isExtensible(obj) && propKind(obj, key) === LOCKED) {
+          return value;
+        }
+
+        return wrap(value);
       }
 
       const value = Reflect.get(obj, key, receiver);
@@ -304,6 +321,7 @@ export function reactive<T extends object>(target: T): T {
 
         if (deleted && hadOwn) {
           bump(key);
+          signalMap.delete(key);
           triggerIterate();
         }
 
@@ -384,14 +402,14 @@ export function reactive<T extends object>(target: T): T {
               !("value" in after) ||
               (!after.configurable && !after.writable)
             ) {
-              state.set((version) => version + 1);
+              state.set(increment);
               signalMap.delete(key);
             } else if (
               !before ||
               !("value" in before) ||
               !Object.is(before.value, after.value)
             ) {
-              state.set((version) => version + 1);
+              state.set(increment);
             }
           }
 
@@ -422,4 +440,36 @@ export function reactive<T extends object>(target: T): T {
 
 export function toRaw<T>(value: T): T {
   return isObject(value) ? ((value as any)[RAW] ?? value) : value;
+}
+
+function _toRawDeep<T>(value: T, seen: WeakMap<object, unknown>): T {
+  const raw = toRaw(value);
+
+  if (!isObject(raw) || !(Array.isArray(raw) || isPlainObject(raw))) {
+    return raw;
+  }
+
+  if (seen.has(raw)) {
+    return seen.get(raw) as T;
+  }
+
+  const out = Array.isArray(raw)
+    ? []
+    : Object.create(Object.getPrototypeOf(raw));
+
+  seen.set(raw, out);
+
+  for (const key of Object.keys(raw)) {
+    out[key] = _toRawDeep((raw as any)[key], seen);
+  }
+
+  if (Array.isArray(raw)) {
+    out.length = raw.length;
+  }
+
+  return out;
+}
+
+export function toRawDeep<T>(value: T): T {
+  return _toRawDeep(value, new WeakMap<object, unknown>());
 }
