@@ -196,7 +196,7 @@ export function reactive<T extends object>(target: T): T {
         writing = true;
 
         try {
-          ok = Reflect.set(obj, key, value, receiver);
+          ok = Reflect.set(obj, key, toRaw(value), receiver);
         } finally {
           writing = prev;
         }

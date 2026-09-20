@@ -1806,4 +1806,18 @@ describe("Reactive toRaw Unit Test", () => {
 
     assert.strictEqual(observed.foo, 2);
   });
+
+  test("raw array should not contain proxies after element-moving mutations", () => {
+    const observed = signals.reactive({ list: [{ id: 1 }, { id: 2 }] });
+
+    observed.list.reverse();
+
+    const raw = signals.toRaw(observed.list);
+
+    assert.strictEqual(
+      raw.every((item) => signals.toRaw(item) === item),
+      true,
+    );
+    assert.doesNotThrow(() => structuredClone(raw));
+  });
 });
