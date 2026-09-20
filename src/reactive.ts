@@ -179,10 +179,10 @@ export function reactive<T extends object>(target: T): T {
               const method = Reflect.get(obj, key, receiver) as Function;
 
               fn = (...args: any[]) => {
-                const track = tracker();
-
                 if (key === "sort" && typeof args[0] === "function") {
+                  const track = tracker();
                   const compare = args[0];
+
                   args[0] = (a: unknown, b: unknown) =>
                     track(() => compare(a, b));
                 }
