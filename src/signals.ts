@@ -56,10 +56,10 @@ export function tracking() {
   return alien.getActiveSub() !== undefined;
 }
 
-export function tracker<T>() {
+export function tracker() {
   const sub = alien.getActiveSub();
 
-  return (fn: () => T): T => {
+  return <T>(fn: () => T): T => {
     const prev = alien.setActiveSub(sub);
     try {
       return fn();

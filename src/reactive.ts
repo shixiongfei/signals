@@ -135,12 +135,19 @@ export function reactive<T extends object>(target: T): T {
 
           if (i >= obj.length && i < length && String(i) === k) {
             removed.set(increment);
+            signalMap.delete(k);
           }
         }
       }
     } else {
       for (let i = obj.length; i < length; i++) {
-        bump(String(i));
+        const k = String(i);
+        const removed = signalMap.get(k);
+
+        if (removed) {
+          removed.set(increment);
+          signalMap.delete(k);
+        }
       }
     }
 
@@ -460,7 +467,12 @@ function _toRawDeep<T>(value: T, seen: WeakMap<object, unknown>): T {
   seen.set(raw, out);
 
   for (const key of Object.keys(raw)) {
-    out[key] = _toRawDeep((raw as any)[key], seen);
+    Object.defineProperty(out, key, {
+      value: _toRawDeep((raw as any)[key], seen),
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
   }
 
   if (Array.isArray(raw)) {

@@ -424,6 +424,23 @@ describe("Reactive Unit Test", () => {
     assert.strictEqual(runs, 2);
   });
 
+  test("sort comparator reading the sorted array itself should not retrigger the effect", () => {
+    const observed = signals.reactive({ list: [3, 1, 2] });
+    let runs = 0;
+
+    const dispose = signals.effect(() => {
+      runs++;
+
+      if (runs < 5) {
+        observed.list.sort((a, b) => observed.list.length * 0 + (a - b));
+      }
+    });
+
+    dispose();
+
+    assert.strictEqual(runs, 1);
+  });
+
   test("test reactive array - callbacks of non-mutating array methods inside effect are tracked", () => {
     const output: number[][] = [];
     const observed = signals.reactive({ list: [1, 2, 3], factor: 1 });
@@ -512,6 +529,22 @@ describe("Reactive Unit Test", () => {
     observed.arr.length = 1;
 
     assert.strictEqual(observed.arr[2], undefined);
+  });
+
+  test("test reactive array - shrink then regrow should keep index subscribers working", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive({ arr: [1, 2, 3] });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.arr[2]);
+    });
+
+    observed.arr.length = 1;
+    observed.arr[2] = 9;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [3, undefined, 9]);
   });
 
   test("test reactive array - shrink length should react to Object.keys", () => {
@@ -722,6 +755,25 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(observed.log, [0, -1]);
   });
 
+  test("test reactive array - function values stored by mutating methods keep their identity", () => {
+    const f1 = () => 1;
+    const f2 = () => 2;
+    const f3 = () => 3;
+    const f4 = () => 4;
+    const observed = signals.reactive({ list: [] as Array<() => number> });
+
+    observed.list.push(f1);
+    observed.list.unshift(f2);
+    observed.list.splice(1, 0, f3);
+    observed.list.fill(f4, 2);
+
+    assert.strictEqual(observed.list[0], f2);
+    assert.strictEqual(observed.list[1], f3);
+    assert.strictEqual(observed.list[2], f4);
+    assert.strictEqual(observed.list.includes(f4), true);
+    assert.strictEqual(observed.list.indexOf(f2), 0);
+  });
+
   test("test reactive array - shrink sparse array should be fast", () => {
     const observed = signals.reactive({ arr: [] as number[] });
 
@@ -809,6 +861,24 @@ describe("Reactive Unit Test", () => {
     dispose();
 
     assert.deepStrictEqual(output, [1, undefined, 2]);
+  });
+
+  test("test reactive - delete and re-add inside one user batch should still notify", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive<{ foo?: number }>({ foo: 1 });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.foo);
+    });
+
+    signals.batch(() => {
+      delete observed.foo;
+      observed.foo = 2;
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 2]);
   });
 
   test("test reactive - delete missing property", () => {
@@ -2038,6 +2108,40 @@ describe("Reactive toRaw Unit Test", () => {
 
     assert.deepStrictEqual(output, [1, 2]);
   });
+
+  test("toRawDeep should remove proxies nested in assigned containers", () => {
+    const observed = signals.reactive({ child: { x: 1 }, list: [] as any[] });
+
+    observed.list = [observed.child];
+
+    const plain = signals.toRawDeep(observed);
+
+    assert.doesNotThrow(() => structuredClone(plain));
+    assert.deepStrictEqual(plain, { child: { x: 1 }, list: [{ x: 1 }] });
+    assert.strictEqual((plain as any).list[0], plain.child);
+  });
+
+  test("toRawDeep should keep shared references and cycles", () => {
+    const a: any = { n: 1 };
+    a.self = a;
+
+    const plain: any = signals.toRawDeep(signals.reactive({ a, again: a }));
+
+    assert.strictEqual(plain.a, plain.again);
+    assert.strictEqual(plain.a.self, plain.a);
+    assert.notStrictEqual(plain.a, a);
+  });
+
+  test("toRawDeep should keep __proto__ as an own key without changing the prototype", () => {
+    const observed = signals.reactive(
+      JSON.parse('{"__proto__":{"polluted":1}}'),
+    );
+    const plain: any = signals.toRawDeep(observed);
+
+    assert.strictEqual(Object.hasOwn(plain, "__proto__"), true);
+    assert.strictEqual(plain.polluted, undefined);
+    assert.strictEqual(({} as any).polluted, undefined);
+  });
 });
 
 describe("Reactive defineProperty / accessor delete / class", () => {
@@ -2279,6 +2383,22 @@ describe("Reactive defineProperty / accessor delete / class", () => {
     assert.doesNotThrow(() => observed.list[0]);
     assert.strictEqual(observed.a.x, 1);
     assert.strictEqual(observed.list[0].y, 2);
+  });
+
+  test("Object.freeze(raw) after a tracked read should not break reads of nested objects", () => {
+    const raw = { a: { x: 1 } };
+    const observed = signals.reactive(raw);
+
+    const dispose = signals.effect(() => {
+      observed.a;
+    });
+
+    Object.freeze(raw);
+
+    dispose();
+
+    assert.doesNotThrow(() => observed.a);
+    assert.strictEqual(observed.a, raw.a);
   });
 });
 
