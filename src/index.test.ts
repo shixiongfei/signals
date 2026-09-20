@@ -2427,6 +2427,32 @@ describe("Reactive differential test", () => {
     return v;
   };
 
+  const KEYS = ["k0", "k1", "k2", "k3", "x", "o", "arr", "list"];
+
+  const snapIn = (v: any): boolean[] => {
+    const out: boolean[] = [];
+
+    if (Array.isArray(v)) {
+      for (let i = 0; i <= v.length; i++) {
+        out.push(i in v);
+      }
+
+      for (let i = 0; i < v.length; i++) {
+        if (isNode(v[i])) out.push(...snapIn(v[i]));
+      }
+    } else {
+      for (const k of KEYS) {
+        out.push(k in v);
+      }
+
+      for (const k of Object.keys(v)) {
+        if (isNode(v[k])) out.push(...snapIn(v[k]));
+      }
+    }
+
+    return out;
+  };
+
   const isNode = (v: any) => v !== null && typeof v === "object";
 
   const make = (kind: number, n: number): any =>
@@ -2447,7 +2473,7 @@ describe("Reactive differential test", () => {
     let latest: any;
 
     const dispose = signals.effect(() => {
-      latest = snap(observed);
+      latest = [snap(observed), snapIn(observed)];
     });
 
     for (let step = 0; step < steps; step++) {
@@ -2519,8 +2545,15 @@ describe("Reactive differential test", () => {
       apply(m);
       apply(p);
 
-      assert.deepStrictEqual(latest, snap(mirror), `seed ${seed} step ${step}`);
-      assert.deepStrictEqual(snap(observed), snap(mirror));
+      assert.deepStrictEqual(
+        latest,
+        [snap(mirror), snapIn(mirror)],
+        `seed ${seed} step ${step}`,
+      );
+      assert.deepStrictEqual(
+        [snap(observed), snapIn(observed)],
+        [snap(mirror), snapIn(mirror)],
+      );
     }
 
     dispose();
