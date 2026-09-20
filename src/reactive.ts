@@ -55,15 +55,28 @@ const isProxiable = (value: unknown) =>
 const isReactive = (value: unknown) =>
   isObject(value) && (value as any)[RAW] !== undefined;
 
-const isAccessor = (obj: object, key: PropertyKey) => {
-  const desc = Object.getOwnPropertyDescriptor(obj, key);
-  return desc !== undefined && !("value" in desc);
-};
-
 const hasOwn = (obj: object, key: PropertyKey) =>
   Object.prototype.hasOwnProperty.call(obj, key);
 
 const wrap = (value: any) => (isProxiable(value) ? reactive(value) : value);
+
+const NORMAL = 0;
+const ACCESSOR = 1;
+const LOCKED = 2;
+
+const propKind = (obj: object, key: PropertyKey) => {
+  const desc = Object.getOwnPropertyDescriptor(obj, key);
+
+  if (desc === undefined) {
+    return NORMAL;
+  }
+
+  if (!("value" in desc)) {
+    return ACCESSOR;
+  }
+
+  return !desc.configurable && !desc.writable ? LOCKED : NORMAL;
+};
 
 export function reactive<T extends object>(target: T): T {
   if (!isObject(target) || Object.isFrozen(target)) {
@@ -164,11 +177,24 @@ export function reactive<T extends object>(target: T): T {
       let state = signalMap.get(key);
 
       if (!state) {
-        if (!tracking() || isAccessor(obj, key)) {
-          return wrap(Reflect.get(obj, key, receiver));
+        const value = Reflect.get(obj, key, receiver);
+        const tracked = tracking();
+
+        if (!tracked && !isProxiable(value)) {
+          return value;
         }
 
-        state = signal(wrap(Reflect.get(obj, key, receiver)));
+        const kind = propKind(obj, key);
+
+        if (kind === LOCKED) {
+          return value;
+        }
+
+        if (!tracked || kind === ACCESSOR) {
+          return wrap(value);
+        }
+
+        state = signal(wrap(value));
         signalMap.set(key, state);
       }
 
@@ -302,7 +328,13 @@ export function reactive<T extends object>(target: T): T {
             return result;
           }
 
-          if (result && isAccessor(obj, key)) {
+          const kind = propKind(obj, key);
+
+          if (kind === LOCKED) {
+            return result;
+          }
+
+          if (kind === ACCESSOR) {
             getSignal(ITERATE, 0).get();
             return result;
           }

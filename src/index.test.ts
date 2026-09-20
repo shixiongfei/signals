@@ -977,6 +977,45 @@ describe("Reactive Unit Test", () => {
 
     assert.throws(() => structuredClone(signals.toRaw(observed)));
   });
+
+  test("probe: non-writable non-configurable object property should not throw", () => {
+    const raw: any = {};
+
+    Object.defineProperty(raw, "cfg", { value: { a: 1 } });
+
+    const observed = signals.reactive(raw);
+
+    assert.doesNotThrow(() => observed.cfg);
+    assert.strictEqual(observed.cfg.a, 1);
+  });
+
+  test("locked object property should not throw outside effect", () => {
+    const raw: any = {};
+
+    Object.defineProperty(raw, "cfg", { value: { a: 1 } });
+
+    const observed = signals.reactive(raw);
+
+    assert.doesNotThrow(() => observed.cfg);
+    assert.strictEqual(observed.cfg.a, 1);
+  });
+
+  test("locked object property should not throw inside effect nor with 'in'", () => {
+    const raw: any = {};
+
+    Object.defineProperty(raw, "cfg", { value: { a: 1 } });
+
+    const observed = signals.reactive(raw);
+    const output: unknown[] = [];
+
+    const dispose = signals.effect(() => {
+      output.push(["cfg" in observed, observed.cfg.a]);
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [[true, 1]]);
+  });
 });
 
 describe("Reactive Structure Unit Test", () => {
