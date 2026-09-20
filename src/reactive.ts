@@ -446,7 +446,7 @@ export function reactive<T extends object>(target: T): T {
 }
 
 export function toRaw<T>(value: T): T {
-  return isObject(value) ? ((value as any)[RAW] ?? value) : value;
+  return isObject(value) ? (value as any)[RAW] || value : value;
 }
 
 function _toRawDeep<T>(value: T, seen: WeakMap<object, unknown>): T {
