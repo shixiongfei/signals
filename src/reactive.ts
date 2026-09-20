@@ -43,14 +43,14 @@ const arraySearches = new Set<PropertyKey>([
 const isBuiltInSymbol = (key: PropertyKey) =>
   typeof key === "symbol" && builtInSymbols.has(key);
 
+const isObject = (value: unknown) =>
+  value !== null && typeof value === "object";
+
 const isProxiable = (value: unknown) =>
   isObject(value) &&
   (Array.isArray(value) ||
     Object.prototype.toString.call(value) === "[object Object]") &&
   !Object.isFrozen(value);
-
-const isObject = (value: unknown) =>
-  value !== null && typeof value === "object";
 
 const isReactive = (value: unknown) =>
   isObject(value) && (value as any)[RAW] !== undefined;
@@ -275,18 +275,19 @@ export function reactive<T extends object>(target: T): T {
       const result = Reflect.has(obj, key);
 
       if (!result || hasOwn(obj, key)) {
-        if (result && isAccessor(obj, key)) {
-          getSignal(ITERATE, 0).get();
-        } else {
-          let state = signalMap.get(key);
+        let state = signalMap.get(key);
 
-          if (!state) {
-            state = signal(wrap(Reflect.get(obj, key, proxy)));
-            signalMap.set(key, state);
+        if (!state) {
+          if (result && isAccessor(obj, key)) {
+            getSignal(ITERATE, 0).get();
+            return result;
           }
 
-          state.get();
+          state = signal(wrap(Reflect.get(obj, key, proxy)));
+          signalMap.set(key, state);
         }
+
+        state.get();
       }
 
       return result;

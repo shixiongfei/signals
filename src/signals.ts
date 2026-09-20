@@ -11,8 +11,7 @@
 
 import * as alien from "alien-signals";
 
-export type SignalGetterOptions = { untrack?: boolean };
-export type SignalGetter<T> = { get: (options?: SignalGetterOptions) => T };
+export type SignalGetter<T> = { get: () => T };
 export type SignalSetterFn<T> = (previousValue: T) => T;
 export type SignalSetter<T> = { set: (value: T | SignalSetterFn<T>) => void };
 export type Signal<T> = SignalGetter<T> & SignalSetter<T>;
@@ -20,14 +19,11 @@ export type Computed<T> = SignalGetter<T>;
 
 export function signal<T>(initialValue: T): Signal<T> {
   const state = alien.signal(initialValue);
-
-  const get = (options?: SignalGetterOptions) => {
-    return !options?.untrack ? state() : untrack<T>(state);
-  };
+  const get = () => state();
 
   const set = (value: T | SignalSetterFn<T>) => {
     typeof value === "function"
-      ? state((value as SignalSetterFn<T>)(get({ untrack: true })))
+      ? state((value as SignalSetterFn<T>)(untrack<T>(state)))
       : state(value);
   };
 
@@ -35,12 +31,7 @@ export function signal<T>(initialValue: T): Signal<T> {
 }
 
 export function computed<T>(fn: () => T): Computed<T> {
-  const computed = alien.computed(fn);
-
-  const get = (options?: SignalGetterOptions) => {
-    return !options?.untrack ? computed() : untrack(computed);
-  };
-
+  const get = alien.computed(fn);
   return { get };
 }
 

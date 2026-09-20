@@ -1687,4 +1687,24 @@ describe("Reactive toRaw Unit Test", () => {
       n: 2,
     });
   });
+
+  test("repeated 'in' on accessor should not cache or invoke getter", () => {
+    let calls = 0;
+    const observed = signals.reactive({
+      a: 1,
+
+      get foo() {
+        calls++;
+        return this.a;
+      },
+    });
+
+    assert.strictEqual("foo" in observed, true);
+    assert.strictEqual("foo" in observed, true);
+    assert.strictEqual(calls, 0);
+
+    observed.a = 2;
+
+    assert.strictEqual(observed.foo, 2);
+  });
 });
