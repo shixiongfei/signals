@@ -807,7 +807,7 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(output, [10, undefined, 30]);
   });
 
-  test("probe: Object.hasOwn should be tracked", () => {
+  test("Object.hasOwn should react when property is added and deleted", () => {
     const output: boolean[] = [];
     const observed = signals.reactive<{ foo?: number }>({});
 
@@ -816,40 +816,11 @@ describe("Reactive Unit Test", () => {
     });
 
     observed.foo = 1;
-
-    dispose();
-
-    assert.deepStrictEqual(output, [false, true]);
-  });
-
-  test("Object.hasOwn should react when property is added", () => {
-    const output: boolean[] = [];
-    const observed = signals.reactive<{ foo?: number }>({});
-
-    const dispose = signals.effect(() => {
-      output.push(Object.hasOwn(observed, "foo"));
-    });
-
-    observed.foo = 1;
-
-    dispose();
-
-    assert.deepStrictEqual(output, [false, true]);
-  });
-
-  test("hasOwnProperty should react when property is deleted", () => {
-    const output: boolean[] = [];
-    const observed = signals.reactive<{ foo?: number }>({ foo: undefined });
-
-    const dispose = signals.effect(() => {
-      output.push(Object.prototype.hasOwnProperty.call(observed, "foo"));
-    });
-
     delete observed.foo;
 
     dispose();
 
-    assert.deepStrictEqual(output, [true, false]);
+    assert.deepStrictEqual(output, [false, true, false]);
   });
 
   test("Object.hasOwn should not react to value changes", () => {
@@ -867,6 +838,21 @@ describe("Reactive Unit Test", () => {
     assert.deepStrictEqual(output, [true]);
   });
 
+  test("Object.hasOwn on array index should react when array shrinks", () => {
+    const output: boolean[] = [];
+    const observed = signals.reactive({ arr: [1, 2, 3] });
+
+    const dispose = signals.effect(() => {
+      output.push(Object.hasOwn(observed.arr, 2));
+    });
+
+    observed.arr.length = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [true, false]);
+  });
+
   test("assigning inside effect should not subscribe to structure", () => {
     const observed = signals.reactive<{ a?: number; b?: number }>({});
     let runs = 0;
@@ -881,6 +867,50 @@ describe("Reactive Unit Test", () => {
     dispose();
 
     assert.strictEqual(runs, 1);
+  });
+
+  test("throwing setter should not leave the write flag set", () => {
+    const observed: any = signals.reactive({
+      set boom(_: number) {
+        throw new Error("boom");
+      },
+    });
+
+    assert.throws(() => {
+      observed.boom = 1;
+    });
+
+    const output: boolean[] = [];
+
+    const dispose = signals.effect(() => {
+      output.push(Object.hasOwn(observed, "foo"));
+    });
+
+    observed.foo = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [false, true]);
+  });
+
+  test("in on accessor should react when accessor property is deleted and re-added", () => {
+    const output: boolean[] = [];
+    const observed: any = signals.reactive({
+      get foo() {
+        return 1;
+      },
+    });
+
+    const dispose = signals.effect(() => {
+      output.push("foo" in observed);
+    });
+
+    delete observed.foo;
+    observed.foo = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [true, false, true]);
   });
 });
 
@@ -1707,6 +1737,26 @@ describe("Reactive Accessor Unit Test", () => {
     assert.strictEqual(observed._v, 5);
     assert.strictEqual(observed.v, undefined);
   });
+
+  test("repeated 'in' on accessor should not cache or invoke getter", () => {
+    let calls = 0;
+    const observed = signals.reactive({
+      a: 1,
+
+      get foo() {
+        calls++;
+        return this.a;
+      },
+    });
+
+    assert.strictEqual("foo" in observed, true);
+    assert.strictEqual("foo" in observed, true);
+    assert.strictEqual(calls, 0);
+
+    observed.a = 2;
+
+    assert.strictEqual(observed.foo, 2);
+  });
 });
 
 describe("Reactive toRaw Unit Test", () => {
@@ -1787,26 +1837,6 @@ describe("Reactive toRaw Unit Test", () => {
     });
   });
 
-  test("repeated 'in' on accessor should not cache or invoke getter", () => {
-    let calls = 0;
-    const observed = signals.reactive({
-      a: 1,
-
-      get foo() {
-        calls++;
-        return this.a;
-      },
-    });
-
-    assert.strictEqual("foo" in observed, true);
-    assert.strictEqual("foo" in observed, true);
-    assert.strictEqual(calls, 0);
-
-    observed.a = 2;
-
-    assert.strictEqual(observed.foo, 2);
-  });
-
   test("raw array should not contain proxies after element-moving mutations", () => {
     const observed = signals.reactive({ list: [{ id: 1 }, { id: 2 }] });
 
@@ -1819,5 +1849,52 @@ describe("Reactive toRaw Unit Test", () => {
       true,
     );
     assert.doesNotThrow(() => structuredClone(raw));
+  });
+});
+
+describe("Reactive raw purity vs holding proxy", () => {
+  test("A: element-moving mutation should leave raw items in raw array", () => {
+    const a = { id: 1 };
+    const b = { id: 2 };
+    const observed = signals.reactive({ list: [a, b] });
+    const raw = signals.toRaw(observed.list);
+
+    observed.list.reverse();
+
+    assert.strictEqual(raw[0], b);
+    assert.strictEqual(raw[1], a);
+  });
+
+  test("B: assigning a reactive value should read back the same proxy", () => {
+    const child = { x: 1 };
+    const obj: any = { child };
+    const observed = signals.reactive(obj);
+
+    observed.other = observed.child;
+
+    assert.strictEqual(observed.other, observed.child);
+    assert.notStrictEqual(observed.other, child);
+    assert.strictEqual(signals.toRaw(observed.other), child);
+
+    const output: number[] = [];
+
+    const dispose = signals.effect(() => {
+      output.push(observed.child.x);
+    });
+
+    observed.other.x = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [1, 2]);
+  });
+
+  test("C: structuredClone(toRaw) after reverse should not throw", () => {
+    const observed = signals.reactive({ list: [{ id: 1 }, { id: 2 }] });
+
+    observed.list.reverse();
+
+    // 当前推演：抛 DataCloneError
+    assert.doesNotThrow(() => structuredClone(signals.toRaw(observed.list)));
   });
 });
