@@ -79,7 +79,9 @@ export function reactive<T extends object>(target: T): T {
   }
 
   const signalMap = new Map<PropertyKey, Signal<any>>();
+
   let functionMap: Map<PropertyKey, Function> | undefined;
+  let writing = false;
 
   const getSignal = <T>(key: PropertyKey, initial: T): Signal<T> => {
     let state = signalMap.get(key);
@@ -180,6 +182,8 @@ export function reactive<T extends object>(target: T): T {
         const hadOwn = hasOwn(obj, key);
         const hadKey = key in obj;
         const length = Array.isArray(obj) ? obj.length : 0;
+        const prev = writing;
+        let ok: boolean;
 
         if (
           Array.isArray(obj) &&
@@ -189,7 +193,13 @@ export function reactive<T extends object>(target: T): T {
           value = Number(value);
         }
 
-        const ok = Reflect.set(obj, key, value, receiver);
+        writing = true;
+
+        try {
+          ok = Reflect.set(obj, key, value, receiver);
+        } finally {
+          writing = prev;
+        }
 
         if (ok) {
           const state = signalMap.get(key);
@@ -300,6 +310,14 @@ export function reactive<T extends object>(target: T): T {
     ownKeys(obj) {
       getSignal(ITERATE, 0).get();
       return Reflect.ownKeys(obj);
+    },
+
+    getOwnPropertyDescriptor(obj, key) {
+      if (!writing && !isBuiltInSymbol(key)) {
+        getSignal(ITERATE, 0).get();
+      }
+
+      return Reflect.getOwnPropertyDescriptor(obj, key);
     },
   });
 

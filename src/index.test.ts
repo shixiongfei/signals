@@ -806,6 +806,82 @@ describe("Reactive Unit Test", () => {
 
     assert.deepStrictEqual(output, [10, undefined, 30]);
   });
+
+  test("probe: Object.hasOwn should be tracked", () => {
+    const output: boolean[] = [];
+    const observed = signals.reactive<{ foo?: number }>({});
+
+    const dispose = signals.effect(() => {
+      output.push(Object.hasOwn(observed, "foo"));
+    });
+
+    observed.foo = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [false, true]);
+  });
+
+  test("Object.hasOwn should react when property is added", () => {
+    const output: boolean[] = [];
+    const observed = signals.reactive<{ foo?: number }>({});
+
+    const dispose = signals.effect(() => {
+      output.push(Object.hasOwn(observed, "foo"));
+    });
+
+    observed.foo = 1;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [false, true]);
+  });
+
+  test("hasOwnProperty should react when property is deleted", () => {
+    const output: boolean[] = [];
+    const observed = signals.reactive<{ foo?: number }>({ foo: undefined });
+
+    const dispose = signals.effect(() => {
+      output.push(Object.prototype.hasOwnProperty.call(observed, "foo"));
+    });
+
+    delete observed.foo;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [true, false]);
+  });
+
+  test("Object.hasOwn should not react to value changes", () => {
+    const output: boolean[] = [];
+    const observed = signals.reactive({ foo: 1 });
+
+    const dispose = signals.effect(() => {
+      output.push(Object.hasOwn(observed, "foo"));
+    });
+
+    observed.foo = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [true]);
+  });
+
+  test("assigning inside effect should not subscribe to structure", () => {
+    const observed = signals.reactive<{ a?: number; b?: number }>({});
+    let runs = 0;
+
+    const dispose = signals.effect(() => {
+      runs++;
+      observed.a = 1;
+    });
+
+    observed.b = 1;
+
+    dispose();
+
+    assert.strictEqual(runs, 1);
+  });
 });
 
 describe("Reactive Structure Unit Test", () => {
@@ -1384,7 +1460,7 @@ describe("Reactive Accessor Unit Test", () => {
     assert.deepStrictEqual(output, [0, 4]);
   });
 
-  test("getter should return fresh value after 'in' check", () => {
+  test("in on accessor should not rerun effect when getter dependency changes", () => {
     const output: boolean[] = [];
     const observed = signals.reactive({
       a: 1,
@@ -1403,6 +1479,29 @@ describe("Reactive Accessor Unit Test", () => {
     dispose();
 
     assert.deepStrictEqual(output, [true]);
+  });
+
+  test("getter should return fresh value after 'in' check", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      a: 1,
+
+      get double() {
+        return this.a * 2;
+      },
+    });
+
+    assert.strictEqual("double" in observed, true);
+
+    const dispose = signals.effect(() => {
+      output.push(observed.double);
+    });
+
+    observed.a = 2;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [2, 4]);
   });
 
   test("getter should stay fresh in effect that also uses 'in'", () => {
