@@ -52,6 +52,10 @@ export function batch<T>(fn: () => T) {
   }
 }
 
+export function tracking() {
+  return alien.getActiveSub() !== undefined;
+}
+
 export function untrack<T>(fn: () => T): T {
   const sub = alien.setActiveSub(undefined);
   try {

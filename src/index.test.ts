@@ -912,6 +912,71 @@ describe("Reactive Unit Test", () => {
 
     assert.deepStrictEqual(output, [true, false, true]);
   });
+
+  test("reads outside effect should not prevent later tracking", () => {
+    const observed = signals.reactive({ a: 1, list: [1, 2, 3] });
+
+    assert.strictEqual(observed.a, 1);
+    assert.strictEqual(observed.list[1], 2);
+    assert.strictEqual("a" in observed, true);
+    assert.deepStrictEqual(Object.keys(observed), ["a", "list"]);
+
+    const output: unknown[] = [];
+
+    const dispose = signals.effect(() => {
+      output.push([observed.a, observed.list[1], "a" in observed]);
+    });
+
+    observed.a = 2;
+    observed.list[1] = 20;
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [1, 2, true],
+      [2, 2, true],
+      [2, 20, true],
+    ]);
+  });
+
+  test("element-moving mutation before subscribing should not break tracking", () => {
+    const observed = signals.reactive({
+      list: [{ id: 1 }, { id: 2 }, { id: 3 }],
+    });
+
+    observed.list.shift();
+
+    const output: number[] = [];
+
+    const dispose = signals.effect(() => {
+      output.push(observed.list[0].id);
+    });
+
+    observed.list.reverse();
+
+    dispose();
+
+    assert.deepStrictEqual(output, [2, 3]);
+  });
+
+  test("computed should track reads", () => {
+    const observed = signals.reactive({ a: 1 });
+    const double = signals.computed(() => observed.a * 2);
+
+    assert.strictEqual(double.get(), 2);
+
+    observed.a = 5;
+
+    assert.strictEqual(double.get(), 10);
+  });
+
+  test("probe: proxy nested in an assigned container stays in raw", () => {
+    const observed = signals.reactive({ child: { x: 1 }, list: [] as any[] });
+
+    observed.list = [observed.child];
+
+    assert.throws(() => structuredClone(signals.toRaw(observed)));
+  });
 });
 
 describe("Reactive Structure Unit Test", () => {
@@ -1894,7 +1959,6 @@ describe("Reactive raw purity vs holding proxy", () => {
 
     observed.list.reverse();
 
-    // 当前推演：抛 DataCloneError
     assert.doesNotThrow(() => structuredClone(signals.toRaw(observed.list)));
   });
 });

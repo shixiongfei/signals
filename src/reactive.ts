@@ -9,7 +9,7 @@
  * https://github.com/shixiongfei/signals
  */
 
-import { batch, signal, trigger, untrack } from "./signals.ts";
+import { batch, signal, tracking, trigger, untrack } from "./signals.ts";
 import type { Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
@@ -94,8 +94,14 @@ export function reactive<T extends object>(target: T): T {
     return state;
   };
 
+  const trackIterate = () => {
+    if (tracking()) {
+      getSignal(ITERATE, 0).get();
+    }
+  };
+
   const triggerIterate = () => {
-    getSignal(ITERATE, 0).set((value) => value + 1);
+    signalMap.get(ITERATE)?.set((value: number) => value + 1);
   };
 
   const proxy = new Proxy(target, {
@@ -158,7 +164,7 @@ export function reactive<T extends object>(target: T): T {
       let state = signalMap.get(key);
 
       if (!state) {
-        if (isAccessor(obj, key)) {
+        if (!tracking() || isAccessor(obj, key)) {
           return wrap(Reflect.get(obj, key, receiver));
         }
 
@@ -292,6 +298,10 @@ export function reactive<T extends object>(target: T): T {
         let state = signalMap.get(key);
 
         if (!state) {
+          if (!tracking()) {
+            return result;
+          }
+
           if (result && isAccessor(obj, key)) {
             getSignal(ITERATE, 0).get();
             return result;
@@ -308,13 +318,13 @@ export function reactive<T extends object>(target: T): T {
     },
 
     ownKeys(obj) {
-      getSignal(ITERATE, 0).get();
+      trackIterate();
       return Reflect.ownKeys(obj);
     },
 
     getOwnPropertyDescriptor(obj, key) {
       if (!writing && !isBuiltInSymbol(key)) {
-        getSignal(ITERATE, 0).get();
+        trackIterate();
       }
 
       return Reflect.getOwnPropertyDescriptor(obj, key);
