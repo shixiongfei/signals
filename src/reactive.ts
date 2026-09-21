@@ -45,7 +45,7 @@ const arraySearches = new Set<PropertyKey>([
 const isBuiltInSymbol = (key: PropertyKey) =>
   typeof key === "symbol" && builtInSymbols.has(key);
 
-const isObject = (value: unknown) =>
+const isObject = (value: unknown): value is object =>
   value !== null && typeof value === "object";
 
 const isPlainObject = (value: object) => {
