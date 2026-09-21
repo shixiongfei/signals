@@ -2682,6 +2682,104 @@ describe("Reactive notify Unit Test", () => {
       signals.notify(1 as any);
     });
   });
+
+  test("notify together with a normal write to the same key inside a batch should rerun once", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ m: new Map<number, number>() });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.m.size);
+    });
+
+    signals.batch(() => {
+      observed.m = new Map([[1, 1]]);
+      signals.notify(observed, "m");
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [0, 1]);
+  });
+
+  test("notify the same key repeatedly inside a batch should rerun once", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ m: new Map<number, number>() });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.m.size);
+    });
+
+    signals.batch(() => {
+      observed.m.set(1, 1);
+      signals.notify(observed, "m");
+      signals.notify(observed, "m");
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [0, 1]);
+  });
+
+  test("notify a key and notify without key inside a batch should rerun a shared effect once", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive({ m: new Map<number, number>() });
+
+    const dispose = signals.effect(() => {
+      output.push([Object.keys(observed), observed.m.size]);
+    });
+
+    signals.batch(() => {
+      observed.m.set(1, 1);
+      signals.notify(observed, "m");
+      signals.notify(observed);
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [["m"], 0],
+      [["m"], 1],
+    ]);
+  });
+
+  test("notify should recompute a dependent computed only once", () => {
+    let runs = 0;
+    const observed = signals.reactive({ m: new Map<number, number>() });
+    const size = signals.computed(() => {
+      runs++;
+      return observed.m.size;
+    });
+
+    assert.strictEqual(size.get(), 0);
+
+    observed.m.set(1, 1);
+
+    signals.batch(() => {
+      signals.notify(observed, "m");
+      signals.notify(observed, "m");
+    });
+
+    assert.strictEqual(size.get(), 1);
+    assert.strictEqual(runs, 2);
+  });
+
+  test("separate notify calls outside a batch are separate notifications", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ m: new Map<number, number>() });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.m.size);
+    });
+
+    observed.m.set(1, 1);
+    signals.notify(observed, "m");
+    observed.m.set(2, 2);
+    signals.notify(observed, "m");
+
+    dispose();
+
+    assert.deepStrictEqual(output, [0, 1, 2]);
+  });
 });
 
 describe("Reactive mutate Unit Test", () => {
@@ -2789,6 +2887,82 @@ describe("Reactive mutate Unit Test", () => {
     assert.deepStrictEqual(output, [
       [0, 0],
       [1, 1],
+    ]);
+  });
+
+  test("mutate with a normal write to the returned key should rerun once", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({ m: new Map<number, number>() });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.m.size);
+    });
+
+    signals.mutate(observed, (o) => {
+      o.m = new Map([[1, 1]]);
+      return "m";
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [0, 1]);
+  });
+
+  test("mutate with a structural write and a returned key should rerun a shared effect once", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive<{
+      m: Map<number, number>;
+      extra?: number;
+    }>({
+      m: new Map(),
+    });
+
+    const dispose = signals.effect(() => {
+      output.push([Object.keys(observed), observed.m.size]);
+    });
+
+    signals.mutate(observed, (o) => {
+      o.extra = 1;
+      o.m.set(1, 1);
+      return "m";
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [["m"], 0],
+      [["m", "extra"], 1],
+    ]);
+  });
+
+  test("mutate inside a user batch and nested mutate on the same key should rerun once", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive({ m: new Map<number, number>(), n: 0 });
+
+    const dispose = signals.effect(() => {
+      output.push([observed.m.size, observed.n]);
+    });
+
+    signals.batch(() => {
+      signals.mutate(observed, (o) => {
+        o.m.set(1, 1);
+
+        signals.mutate(o, (inner) => {
+          inner.m.set(2, 2);
+          return "m";
+        });
+
+        return "m";
+      });
+
+      observed.n = 1;
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [0, 0],
+      [2, 1],
     ]);
   });
 });
