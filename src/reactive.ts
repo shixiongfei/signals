@@ -14,6 +14,8 @@ import type { Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
 const ITERATE = Symbol("ITERATE");
+const NOTIFY = Symbol("NOTIFY");
+
 const proxyMap = new WeakMap<object, object>();
 
 const builtInSymbols = new Set(
@@ -160,6 +162,20 @@ export function reactive<T>(target: T): T {
     get(obj, key, receiver) {
       if (key === RAW) {
         return obj;
+      }
+
+      if (key === NOTIFY) {
+        return (keys: PropertyKey[]) =>
+          batch(() => {
+            if (keys.length === 0) {
+              triggerIterate();
+              return;
+            }
+
+            for (const k of keys) {
+              bump(typeof k === "number" ? String(k) : k);
+            }
+          });
       }
 
       if (isBuiltInSymbol(key)) {
@@ -443,6 +459,12 @@ export function reactive<T>(target: T): T {
 
   proxyMap.set(target, proxy);
   return proxy;
+}
+
+export function notify<T>(value: T, ...keys: PropertyKey[]) {
+  if (isObject(value)) {
+    (value as any)[NOTIFY]?.(keys);
+  }
 }
 
 export function toRaw<T>(value: T): T {

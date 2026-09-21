@@ -2565,3 +2565,121 @@ describe("Reactive differential test", () => {
     });
   }
 });
+
+describe("Reactive notify Unit Test", () => {
+  test("notify with a single key should rerun readers of a Map or Set value", () => {
+    const mapOutput: number[] = [];
+    const setOutput: number[] = [];
+    const observed = signals.reactive({
+      m: new Map<number, number>(),
+      list: [new Set<number>()],
+    });
+
+    const dispose1 = signals.effect(() => {
+      mapOutput.push(observed.m.size);
+    });
+    const dispose2 = signals.effect(() => {
+      setOutput.push(observed.list[0].size);
+    });
+
+    observed.m.set(1, 1);
+    observed.list[0].add(1);
+
+    assert.deepStrictEqual(mapOutput, [0]);
+    assert.deepStrictEqual(setOutput, [0]);
+
+    signals.notify(observed, "m");
+    signals.notify(observed.list, 0);
+
+    dispose1();
+    dispose2();
+
+    assert.deepStrictEqual(mapOutput, [0, 1]);
+    assert.deepStrictEqual(setOutput, [0, 1]);
+  });
+
+  test("notify should only rerun effects that read the notified keys", () => {
+    const outA: number[] = [];
+    const outB: number[] = [];
+    const outC: number[] = [];
+    const observed = signals.reactive({
+      a: new Set<number>(),
+      b: new Set<number>(),
+      c: new Set<number>(),
+    });
+
+    const dispose1 = signals.effect(() => {
+      outA.push(observed.a.size);
+    });
+    const dispose2 = signals.effect(() => {
+      outB.push(observed.b.size);
+    });
+    const dispose3 = signals.effect(() => {
+      outC.push(observed.c.size);
+    });
+
+    observed.a.add(1);
+    observed.b.add(1);
+    observed.c.add(1);
+
+    signals.notify(observed, "a", "c");
+
+    dispose1();
+    dispose2();
+    dispose3();
+
+    assert.deepStrictEqual(outA, [0, 1]);
+    assert.deepStrictEqual(outB, [0]);
+    assert.deepStrictEqual(outC, [0, 1]);
+  });
+
+  test("notify with multiple or duplicate keys should rerun a shared effect only once", () => {
+    const output: number[] = [];
+    const observed = signals.reactive({
+      list: [new Set<number>(), new Set<number>()],
+    });
+
+    const dispose = signals.effect(() => {
+      output.push(observed.list[0].size + observed.list[1].size);
+    });
+
+    observed.list[0].add(1);
+    observed.list[1].add(1);
+
+    signals.notify(observed.list, 0, 1, 1);
+
+    dispose();
+
+    assert.deepStrictEqual(output, [0, 2]);
+  });
+
+  test("notify without key should trigger enumeration observers only", () => {
+    const keys: string[][] = [];
+    const values: number[] = [];
+    const observed = signals.reactive({ a: 1 });
+
+    const dispose1 = signals.effect(() => {
+      keys.push(Object.keys(observed));
+    });
+    const dispose2 = signals.effect(() => {
+      values.push(observed.a);
+    });
+
+    signals.notify(observed);
+
+    dispose1();
+    dispose2();
+
+    assert.deepStrictEqual(keys, [["a"], ["a"]]);
+    assert.deepStrictEqual(values, [1]);
+  });
+
+  test("notify on non-reactive values should be a no-op", () => {
+    assert.doesNotThrow(() => {
+      signals.notify({ a: 1 }, "a");
+      signals.notify(new Map(), "x");
+      signals.notify(null as any);
+      signals.notify(1 as any);
+    });
+  });
+});
