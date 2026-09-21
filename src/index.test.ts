@@ -2683,3 +2683,112 @@ describe("Reactive notify Unit Test", () => {
     });
   });
 });
+
+describe("Reactive mutate Unit Test", () => {
+  test("mutate returning a key or a key array should notify those keys", () => {
+    const outA: number[] = [];
+    const outB: number[] = [];
+    const outC: number[] = [];
+    const observed = signals.reactive({
+      a: new Set<number>(),
+      b: new Set<number>(),
+      c: new Set<number>(),
+    });
+
+    const dispose1 = signals.effect(() => {
+      outA.push(observed.a.size);
+    });
+    const dispose2 = signals.effect(() => {
+      outB.push(observed.b.size);
+    });
+    const dispose3 = signals.effect(() => {
+      outC.push(observed.c.size);
+    });
+
+    signals.mutate(observed, (o) => {
+      o.a.add(1);
+      return "a";
+    });
+
+    signals.mutate(observed, (o) => {
+      o.b.add(1);
+      o.c.add(1);
+      return ["b", "c"];
+    });
+
+    dispose1();
+    dispose2();
+    dispose3();
+
+    assert.deepStrictEqual(outA, [0, 1]);
+    assert.deepStrictEqual(outB, [0, 1]);
+    assert.deepStrictEqual(outC, [0, 1]);
+  });
+
+  test("mutate returning an empty array should notify enumeration observers only", () => {
+    const keys: string[][] = [];
+    const values: number[] = [];
+    const observed = signals.reactive({ a: 1 });
+
+    const dispose1 = signals.effect(() => {
+      keys.push(Object.keys(observed));
+    });
+    const dispose2 = signals.effect(() => {
+      values.push(observed.a);
+    });
+
+    signals.mutate(observed, () => []);
+
+    dispose1();
+    dispose2();
+
+    assert.deepStrictEqual(keys, [["a"], ["a"]]);
+    assert.deepStrictEqual(values, [1]);
+  });
+
+  test("mutate returning undefined should not notify", () => {
+    const keys: string[][] = [];
+    const sizes: number[] = [];
+    const observed = signals.reactive({ m: new Map<number, number>() });
+
+    const dispose1 = signals.effect(() => {
+      keys.push(Object.keys(observed));
+    });
+    const dispose2 = signals.effect(() => {
+      sizes.push(observed.m.size);
+    });
+
+    signals.mutate(observed, (o) => {
+      o.m.set(1, 1);
+      return undefined;
+    });
+
+    dispose1();
+    dispose2();
+
+    assert.deepStrictEqual(keys, [["m"]]);
+    assert.deepStrictEqual(sizes, [0]);
+  });
+
+  test("mutate should accept numeric index keys and merge with writes in the callback into one rerun", () => {
+    const output: unknown[] = [];
+    const observed = signals.reactive({ list: [new Set<number>()], n: 0 });
+
+    const dispose = signals.effect(() => {
+      output.push([observed.list[0].size, observed.n]);
+    });
+
+    signals.mutate(observed.list, (list) => {
+      list[0].add(1);
+      observed.n = 1;
+      return 0;
+    });
+
+    dispose();
+
+    assert.deepStrictEqual(output, [
+      [0, 0],
+      [1, 1],
+    ]);
+  });
+});

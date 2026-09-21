@@ -467,6 +467,25 @@ export function notify<T>(value: T, ...keys: PropertyKey[]) {
   }
 }
 
+export function mutate<T extends object>(
+  obj: T,
+  fn: (obj: T) => PropertyKey | PropertyKey[] | undefined,
+) {
+  batch(() => {
+    const changed = fn(obj);
+
+    if (changed === undefined) {
+      return;
+    }
+
+    if (Array.isArray(changed)) {
+      notify(obj, ...changed);
+    } else {
+      notify(obj, changed);
+    }
+  });
+}
+
 export function toRaw<T>(value: T): T {
   return isObject(value) ? (value as any)[RAW] || value : value;
 }
@@ -504,6 +523,6 @@ function _toRawDeep<T>(value: T, seen: WeakMap<object, unknown>): T {
   return out;
 }
 
-export function toRawDeep<T>(value: T): T {
-  return _toRawDeep(value, new WeakMap<object, unknown>());
+export function toRawDeep<T>(value: T) {
+  return _toRawDeep<T>(value, new WeakMap<object, unknown>());
 }
