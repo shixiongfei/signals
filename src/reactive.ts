@@ -61,8 +61,10 @@ const isProxiable = (value: unknown) =>
 const isReactive = (value: unknown) =>
   isObject(value) && (value as any)[RAW] !== undefined;
 
-const hasOwn = (obj: object, key: PropertyKey) =>
-  Object.prototype.hasOwnProperty.call(obj, key);
+const hasOwn =
+  Object.hasOwn ||
+  ((obj: object, key: PropertyKey) =>
+    Object.prototype.hasOwnProperty.call(obj, key));
 
 const wrap = (value: any) => (isProxiable(value) ? reactive(value) : value);
 
@@ -84,6 +86,8 @@ const propKind = (obj: object, key: PropertyKey) => {
   return !desc.configurable && !desc.writable ? LOCKED : NORMAL;
 };
 
+const increment = (version: number) => version + 1;
+
 export function reactive<T>(target: T): T {
   if (!isObject(target) || Object.isFrozen(target)) {
     return target;
@@ -100,6 +104,7 @@ export function reactive<T>(target: T): T {
   const signalMap = new Map<PropertyKey, Signal<number>>();
 
   let functionMap: Map<PropertyKey, Function> | undefined;
+  let notifyFn: ((keys: PropertyKey[]) => void) | undefined;
   let writing = false;
 
   const getSignal = (key: PropertyKey) => {
@@ -112,8 +117,6 @@ export function reactive<T>(target: T): T {
 
     return state;
   };
-
-  const increment = (version: number) => version + 1;
 
   const bump = (key: PropertyKey) => {
     signalMap.get(key)?.set(increment);
@@ -165,17 +168,20 @@ export function reactive<T>(target: T): T {
       }
 
       if (key === NOTIFY) {
-        return (keys: PropertyKey[]) =>
-          batch(() => {
-            if (keys.length === 0) {
-              triggerIterate();
-              return;
-            }
+        if (!notifyFn) {
+          notifyFn = (keys: PropertyKey[]) =>
+            batch(() => {
+              if (keys.length === 0) {
+                triggerIterate();
+                return;
+              }
 
-            for (const k of keys) {
-              bump(typeof k === "number" ? String(k) : k);
-            }
-          });
+              for (const k of keys) {
+                bump(typeof k === "number" ? String(k) : k);
+              }
+            });
+        }
+        return notifyFn;
       }
 
       if (isBuiltInSymbol(key)) {
@@ -291,17 +297,14 @@ export function reactive<T>(target: T): T {
       return batch(() => {
         const hadOwn = hasOwn(obj, key);
         const hadKey = key in obj;
-        const length = Array.isArray(obj) ? obj.length : 0;
+        const isArray = Array.isArray(obj);
+        const length = isArray ? obj.length : 0;
         const state = signalMap.get(key);
         const oldValue = state && hadOwn ? Reflect.get(obj, key) : undefined;
         const prev = writing;
         let ok: boolean;
 
-        if (
-          Array.isArray(obj) &&
-          key === "length" &&
-          typeof value !== "number"
-        ) {
+        if (isArray && key === "length" && typeof value !== "number") {
           value = Number(value);
         }
 
@@ -324,7 +327,7 @@ export function reactive<T>(target: T): T {
             triggerIterate();
           }
 
-          if (Array.isArray(obj) && obj.length !== length) {
+          if (isArray && obj.length !== length) {
             syncLength(obj, length);
           }
         }
@@ -408,7 +411,8 @@ export function reactive<T>(target: T): T {
       return batch(() => {
         const before = Object.getOwnPropertyDescriptor(obj, key);
         const hadKey = key in obj;
-        const length = Array.isArray(obj) ? obj.length : 0;
+        const isArray = Array.isArray(obj);
+        const length = isArray ? obj.length : 0;
 
         const ok = Reflect.defineProperty(
           obj,
@@ -443,11 +447,11 @@ export function reactive<T>(target: T): T {
               before.enumerable !== after.enumerable ||
               "value" in before !== "value" in after);
 
-          if (before ? changed : !hadKey) {
+          if (changed || !hadKey) {
             triggerIterate();
           }
 
-          if (Array.isArray(obj) && obj.length !== length) {
+          if (isArray && obj.length !== length) {
             syncLength(obj, length);
           }
         }
