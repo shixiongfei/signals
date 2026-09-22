@@ -1146,6 +1146,19 @@ describe("Reactive Unit Test", () => {
 
     assert.deepStrictEqual(output, [[true, 1]]);
   });
+
+  test("test reactive - setting a built-in symbol key should bypass reactivity tracking", () => {
+    const observed = signals.reactive<any>({});
+    const customIterator = function* () {
+      yield 1;
+      yield 2;
+    };
+
+    observed[Symbol.iterator] = customIterator;
+
+    assert.strictEqual(observed[Symbol.iterator], customIterator);
+    assert.deepStrictEqual([...observed], [1, 2]);
+  });
 });
 
 describe("Reactive Structure Unit Test", () => {
