@@ -46,7 +46,7 @@ const isPlainObject = (value: object) => {
   return proto === Object.prototype || proto === null;
 };
 
-const isProxiable = (value: unknown) =>
+const isProxiable = (value: unknown): value is object =>
   isObject(value) &&
   (Array.isArray(value) || isPlainObject(value)) &&
   !Object.isFrozen(value);
@@ -89,15 +89,12 @@ export function createReactivity({
 
   const proxyMap = new WeakMap<object, object>();
 
-  const isReactive = (value: unknown) =>
-    isObject(value) && (value as any)[RAW] !== undefined;
-
   function reactive<T>(target: T): T {
-    if (!isObject(target) || Object.isFrozen(target)) {
+    if (!isProxiable(target)) {
       return target;
     }
 
-    if (isReactive(target)) {
+    if ((target as any)[RAW] !== undefined) {
       return target;
     }
 
@@ -106,7 +103,6 @@ export function createReactivity({
     }
 
     const signalMap = new Map<PropertyKey, Signal<number>>();
-    const wrap = (value: any) => (isProxiable(value) ? reactive(value) : value);
 
     let functionMap: Map<PropertyKey, Function> | undefined;
     let notifyFn: ((keys: PropertyKey[]) => void) | undefined;
@@ -124,7 +120,11 @@ export function createReactivity({
     };
 
     const bump = (key: PropertyKey) => {
-      signalMap.get(key)?.set(increment);
+      const state = signalMap.get(key);
+
+      if (state) {
+        state.set(increment);
+      }
     };
 
     const triggerIterate = () => {
@@ -234,7 +234,7 @@ export function createReactivity({
                 const method = Reflect.get(obj, key, receiver) as Function;
 
                 fn = (...args: any[]) => {
-                  args[0] = wrap(args[0]);
+                  args[0] = reactive(args[0]);
                   return Reflect.apply(method, receiver, args);
                 };
 
@@ -261,7 +261,7 @@ export function createReactivity({
             return value;
           }
 
-          return wrap(value);
+          return reactive(value);
         }
 
         const value = Reflect.get(obj, key, receiver);
@@ -282,14 +282,14 @@ export function createReactivity({
             getSignal(ITERATE).get();
           }
 
-          return wrap(value);
+          return reactive(value);
         }
 
         if (tracked) {
           getSignal(key).get();
         }
 
-        return wrap(value);
+        return reactive(value);
       },
 
       set(obj, key, value, receiver) {
@@ -474,7 +474,11 @@ export function createReactivity({
 
   function notify<T>(value: T, ...keys: PropertyKey[]) {
     if (isObject(value)) {
-      (value as any)[NOTIFY]?.(keys);
+      const notify = (value as any)[NOTIFY];
+
+      if (notify) {
+        notify(keys);
+      }
     }
   }
 
