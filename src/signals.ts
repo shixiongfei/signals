@@ -24,7 +24,7 @@ export function signal<T>(initialValue: T): Signal<T> {
 
   const set = (value: T | SignalSetterFn<T>) => {
     typeof value === "function"
-      ? state((value as SignalSetterFn<T>)(untrack<T>(state)))
+      ? state((value as SignalSetterFn<T>)(untracked<T>(state)))
       : state(value);
   };
 
@@ -70,7 +70,7 @@ export function tracker() {
   };
 }
 
-export function untrack<T>(fn: () => T): T {
+export function untracked<T>(fn: () => T): T {
   const sub = alien.setActiveSub(undefined);
   try {
     return fn();

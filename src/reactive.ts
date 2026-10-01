@@ -9,7 +9,7 @@
  * https://github.com/shixiongfei/signals
  */
 
-import { batch, signal, tracker, tracking, untrack } from "./signals.ts";
+import { batch, signal, tracker, tracking, untracked } from "./signals.ts";
 import type { Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
@@ -202,15 +202,15 @@ export function reactive<T>(target: T): T {
 
               fn = (...args: any[]) => {
                 if (key === "sort" && typeof args[0] === "function") {
-                  const track = tracker();
+                  const tracked = tracker();
                   const compare = args[0];
 
                   args[0] = (a: unknown, b: unknown) =>
-                    track(() => compare(a, b));
+                    tracked(() => compare(a, b));
                 }
 
                 return batch(() =>
-                  untrack(() => Reflect.apply(method, receiver, args)),
+                  untracked(() => Reflect.apply(method, receiver, args)),
                 );
               };
 
