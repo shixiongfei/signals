@@ -9,14 +9,28 @@
  * https://github.com/shixiongfei/signals
  */
 
-import { batch, signal, tracker, tracking, untracked } from "./signals.ts";
 import type { Signal } from "./types.ts";
 
-const RAW = Symbol("RAW");
-const ITERATE = Symbol("ITERATE");
-const NOTIFY = Symbol("NOTIFY");
+export interface SignalProvider {
+  signal<T>(initialValue: T): Signal<T>;
+  batch<T>(fn: () => T): T;
+  tracking(): boolean;
+  tracker(): <T>(fn: () => T) => T;
+  untracked<T>(fn: () => T): T;
+}
 
-const proxyMap = new WeakMap<object, object>();
+export interface Reactivity {
+  reactive<T>(target: T): T;
+  notify<T>(value: T, ...keys: PropertyKey[]): void;
+
+  mutate<T extends object>(
+    obj: T,
+    fn: (obj: T) => PropertyKey | PropertyKey[] | undefined,
+  ): void;
+
+  toRaw<T>(value: T): T;
+  toRawDeep<T>(value: T): T;
+}
 
 const builtInSymbols = new Set(
   Object.getOwnPropertyNames(Symbol)
@@ -58,15 +72,10 @@ const isProxiable = (value: unknown) =>
   (Array.isArray(value) || isPlainObject(value)) &&
   !Object.isFrozen(value);
 
-const isReactive = (value: unknown) =>
-  isObject(value) && (value as any)[RAW] !== undefined;
-
 const hasOwn =
   Object.hasOwn ||
   ((obj: object, key: PropertyKey) =>
     Object.prototype.hasOwnProperty.call(obj, key));
-
-const wrap = (value: any) => (isProxiable(value) ? reactive(value) : value);
 
 const NORMAL = 0;
 const ACCESSOR = 1;
@@ -88,445 +97,467 @@ const propKind = (obj: object, key: PropertyKey) => {
 
 const increment = (version: number) => version + 1;
 
-export function reactive<T>(target: T): T {
-  if (!isObject(target) || Object.isFrozen(target)) {
-    return target;
-  }
+export function createReactivity({
+  batch,
+  signal,
+  tracker,
+  tracking,
+  untracked,
+}: SignalProvider): Reactivity {
+  const RAW = Symbol("RAW");
+  const ITERATE = Symbol("ITERATE");
+  const NOTIFY = Symbol("NOTIFY");
 
-  if (isReactive(target)) {
-    return target;
-  }
+  const proxyMap = new WeakMap<object, object>();
 
-  if (proxyMap.has(target)) {
-    return proxyMap.get(target) as T;
-  }
+  const isReactive = (value: unknown) =>
+    isObject(value) && (value as any)[RAW] !== undefined;
 
-  const signalMap = new Map<PropertyKey, Signal<number>>();
-
-  let functionMap: Map<PropertyKey, Function> | undefined;
-  let notifyFn: ((keys: PropertyKey[]) => void) | undefined;
-  let writing = false;
-
-  const getSignal = (key: PropertyKey) => {
-    let state = signalMap.get(key);
-
-    if (!state) {
-      state = signal(0);
-      signalMap.set(key, state);
+  function reactive<T>(target: T): T {
+    if (!isObject(target) || Object.isFrozen(target)) {
+      return target;
     }
 
-    return state;
-  };
-
-  const bump = (key: PropertyKey) => {
-    signalMap.get(key)?.set(increment);
-  };
-
-  const triggerIterate = () => bump(ITERATE);
-
-  const trackIterate = () => {
-    if (tracking()) {
-      getSignal(ITERATE).get();
+    if (isReactive(target)) {
+      return target;
     }
-  };
 
-  const syncLength = (obj: any[], length: number) => {
-    bump("length");
+    if (proxyMap.has(target)) {
+      return proxyMap.get(target) as T;
+    }
 
-    if (length - obj.length > signalMap.size) {
-      for (const [k, removed] of signalMap) {
-        if (typeof k === "string") {
-          const i = Number(k);
+    const signalMap = new Map<PropertyKey, Signal<number>>();
+    const wrap = (value: any) => (isProxiable(value) ? reactive(value) : value);
 
-          if (i >= obj.length && i < length && String(i) === k) {
+    let functionMap: Map<PropertyKey, Function> | undefined;
+    let notifyFn: ((keys: PropertyKey[]) => void) | undefined;
+    let writing = false;
+
+    const getSignal = (key: PropertyKey) => {
+      let state = signalMap.get(key);
+
+      if (!state) {
+        state = signal(0);
+        signalMap.set(key, state);
+      }
+
+      return state;
+    };
+
+    const bump = (key: PropertyKey) => {
+      signalMap.get(key)?.set(increment);
+    };
+
+    const triggerIterate = () => {
+      bump(ITERATE);
+    };
+
+    const trackIterate = () => {
+      if (tracking()) {
+        getSignal(ITERATE).get();
+      }
+    };
+
+    const syncLength = (obj: any[], length: number) => {
+      bump("length");
+
+      if (length - obj.length > signalMap.size) {
+        for (const [k, removed] of signalMap) {
+          if (typeof k === "string") {
+            const i = Number(k);
+
+            if (i >= obj.length && i < length && String(i) === k) {
+              removed.set(increment);
+              signalMap.delete(k);
+            }
+          }
+        }
+      } else {
+        for (let i = obj.length; i < length; i++) {
+          const k = String(i);
+          const removed = signalMap.get(k);
+
+          if (removed) {
             removed.set(increment);
             signalMap.delete(k);
           }
         }
       }
-    } else {
-      for (let i = obj.length; i < length; i++) {
-        const k = String(i);
-        const removed = signalMap.get(k);
 
-        if (removed) {
-          removed.set(increment);
-          signalMap.delete(k);
+      if (obj.length < length) {
+        triggerIterate();
+      }
+    };
+
+    const proxy = new Proxy(target, {
+      get(obj, key, receiver) {
+        if (key === RAW) {
+          return obj;
         }
-      }
-    }
 
-    if (obj.length < length) {
-      triggerIterate();
-    }
-  };
-
-  const proxy = new Proxy(target, {
-    get(obj, key, receiver) {
-      if (key === RAW) {
-        return obj;
-      }
-
-      if (key === NOTIFY) {
-        if (!notifyFn) {
-          notifyFn = (keys: PropertyKey[]) =>
-            batch(() => {
-              if (keys.length === 0) {
-                triggerIterate();
-                return;
-              }
-
-              for (const k of keys) {
-                bump(typeof k === "number" ? String(k) : k);
-              }
-            });
-        }
-        return notifyFn;
-      }
-
-      if (isBuiltInSymbol(key)) {
-        return Reflect.get(obj, key, receiver);
-      }
-
-      if (!hasOwn(obj, key)) {
-        if (Array.isArray(obj)) {
-          if (!functionMap) {
-            functionMap = new Map();
-          }
-
-          if (arrayMutations.has(key)) {
-            let fn = functionMap.get(key);
-
-            if (!fn) {
-              const method = Reflect.get(obj, key, receiver) as Function;
-
-              fn = (...args: any[]) => {
-                if (key === "sort" && typeof args[0] === "function") {
-                  const tracked = tracker();
-                  const compare = args[0];
-
-                  args[0] = (a: unknown, b: unknown) =>
-                    tracked(() => compare(a, b));
+        if (key === NOTIFY) {
+          if (!notifyFn) {
+            notifyFn = (keys: PropertyKey[]) =>
+              batch(() => {
+                if (keys.length === 0) {
+                  triggerIterate();
+                  return;
                 }
 
-                return batch(() =>
-                  untracked(() => Reflect.apply(method, receiver, args)),
-                );
-              };
-
-              functionMap.set(key, fn);
-            }
-
-            return fn;
+                for (const k of keys) {
+                  bump(typeof k === "number" ? String(k) : k);
+                }
+              });
           }
-
-          if (arraySearches.has(key)) {
-            let fn = functionMap.get(key);
-
-            if (!fn) {
-              const method = Reflect.get(obj, key, receiver) as Function;
-
-              fn = (...args: any[]) => {
-                args[0] = wrap(args[0]);
-                return Reflect.apply(method, receiver, args);
-              };
-
-              functionMap.set(key, fn);
-            }
-
-            return fn;
-          }
+          return notifyFn;
         }
 
-        if (key in obj) {
+        if (isBuiltInSymbol(key)) {
           return Reflect.get(obj, key, receiver);
         }
-      }
 
-      const state = signalMap.get(key);
+        if (!hasOwn(obj, key)) {
+          if (Array.isArray(obj)) {
+            if (!functionMap) {
+              functionMap = new Map();
+            }
 
-      if (state) {
-        state.get();
+            if (arrayMutations.has(key)) {
+              let fn = functionMap.get(key);
+
+              if (!fn) {
+                const method = Reflect.get(obj, key, receiver) as Function;
+
+                fn = (...args: any[]) => {
+                  if (key === "sort" && typeof args[0] === "function") {
+                    const tracked = tracker();
+                    const compare = args[0];
+
+                    args[0] = (a: unknown, b: unknown) =>
+                      tracked(() => compare(a, b));
+                  }
+
+                  return batch(() =>
+                    untracked(() => Reflect.apply(method, receiver, args)),
+                  );
+                };
+
+                functionMap.set(key, fn);
+              }
+
+              return fn;
+            }
+
+            if (arraySearches.has(key)) {
+              let fn = functionMap.get(key);
+
+              if (!fn) {
+                const method = Reflect.get(obj, key, receiver) as Function;
+
+                fn = (...args: any[]) => {
+                  args[0] = wrap(args[0]);
+                  return Reflect.apply(method, receiver, args);
+                };
+
+                functionMap.set(key, fn);
+              }
+
+              return fn;
+            }
+          }
+
+          if (key in obj) {
+            return Reflect.get(obj, key, receiver);
+          }
+        }
+
+        const state = signalMap.get(key);
+
+        if (state) {
+          state.get();
+
+          const value = Reflect.get(obj, key, receiver);
+
+          if (!Object.isExtensible(obj) && propKind(obj, key) === LOCKED) {
+            return value;
+          }
+
+          return wrap(value);
+        }
 
         const value = Reflect.get(obj, key, receiver);
+        const tracked = tracking();
 
-        if (!Object.isExtensible(obj) && propKind(obj, key) === LOCKED) {
+        if (!tracked && !isProxiable(value)) {
           return value;
         }
 
-        return wrap(value);
-      }
+        const kind = propKind(obj, key);
 
-      const value = Reflect.get(obj, key, receiver);
-      const tracked = tracking();
-
-      if (!tracked && !isProxiable(value)) {
-        return value;
-      }
-
-      const kind = propKind(obj, key);
-
-      if (kind === LOCKED) {
-        return value;
-      }
-
-      if (kind === ACCESSOR) {
-        if (tracked) {
-          getSignal(ITERATE).get();
+        if (kind === LOCKED) {
+          return value;
         }
 
-        return wrap(value);
-      }
-
-      if (tracked) {
-        getSignal(key).get();
-      }
-
-      return wrap(value);
-    },
-
-    set(obj, key, value, receiver) {
-      if (key === RAW) {
-        return true;
-      }
-
-      if (isBuiltInSymbol(key)) {
-        return Reflect.set(obj, key, value, receiver);
-      }
-
-      return batch(() => {
-        const hadOwn = hasOwn(obj, key);
-        const hadKey = key in obj;
-        const isArray = Array.isArray(obj);
-        const length = isArray ? obj.length : 0;
-        const state = signalMap.get(key);
-        const oldValue = state && hadOwn ? Reflect.get(obj, key) : undefined;
-        const prev = writing;
-        let ok: boolean;
-
-        if (isArray && key === "length" && typeof value !== "number") {
-          value = Number(value);
-        }
-
-        const raw = toRaw(value);
-
-        writing = true;
-
-        try {
-          ok = Reflect.set(obj, key, raw, receiver);
-        } finally {
-          writing = prev;
-        }
-
-        if (ok) {
-          if (state && (!hadOwn || !Object.is(oldValue, raw))) {
-            bump(key);
-          }
-
-          if (!hadOwn && !hadKey) {
-            triggerIterate();
-          }
-
-          if (isArray && obj.length !== length) {
-            syncLength(obj, length);
-          }
-        }
-
-        return ok;
-      });
-    },
-
-    deleteProperty(obj, key) {
-      if (key === RAW) {
-        return true;
-      }
-
-      return batch(() => {
-        const hadOwn = hasOwn(obj, key);
-        const deleted = Reflect.deleteProperty(obj, key);
-
-        if (deleted && hadOwn) {
-          bump(key);
-          signalMap.delete(key);
-          triggerIterate();
-        }
-
-        return deleted;
-      });
-    },
-
-    has(obj, key) {
-      if (key === RAW) {
-        return true;
-      }
-
-      const result = Reflect.has(obj, key);
-
-      if (!result || hasOwn(obj, key)) {
-        let state = signalMap.get(key);
-
-        if (!state) {
-          if (!tracking()) {
-            return result;
-          }
-
-          const kind = propKind(obj, key);
-
-          if (kind === LOCKED) {
-            return result;
-          }
-
-          if (kind === ACCESSOR) {
+        if (kind === ACCESSOR) {
+          if (tracked) {
             getSignal(ITERATE).get();
-            return result;
           }
 
-          state = getSignal(key);
+          return wrap(value);
         }
 
-        state.get();
-      }
+        if (tracked) {
+          getSignal(key).get();
+        }
 
-      return result;
-    },
+        return wrap(value);
+      },
 
-    ownKeys(obj) {
-      trackIterate();
-      return Reflect.ownKeys(obj);
-    },
+      set(obj, key, value, receiver) {
+        if (key === RAW) {
+          return true;
+        }
 
-    getOwnPropertyDescriptor(obj, key) {
-      if (!writing && !isBuiltInSymbol(key)) {
-        trackIterate();
-      }
+        if (isBuiltInSymbol(key)) {
+          return Reflect.set(obj, key, value, receiver);
+        }
 
-      return Reflect.getOwnPropertyDescriptor(obj, key);
-    },
-
-    defineProperty(obj, key, desc) {
-      if (writing || isBuiltInSymbol(key)) {
-        return Reflect.defineProperty(obj, key, desc);
-      }
-
-      return batch(() => {
-        const before = Object.getOwnPropertyDescriptor(obj, key);
-        const hadKey = key in obj;
-        const isArray = Array.isArray(obj);
-        const length = isArray ? obj.length : 0;
-
-        const ok = Reflect.defineProperty(
-          obj,
-          key,
-          "value" in desc ? { ...desc, value: toRaw(desc.value) } : desc,
-        );
-
-        if (ok) {
-          const after = Object.getOwnPropertyDescriptor(obj, key)!;
+        return batch(() => {
+          const hadOwn = hasOwn(obj, key);
+          const hadKey = key in obj;
+          const isArray = Array.isArray(obj);
+          const length = isArray ? obj.length : 0;
           const state = signalMap.get(key);
+          const oldValue = state && hadOwn ? Reflect.get(obj, key) : undefined;
+          const prev = writing;
+          let ok: boolean;
 
-          if (state) {
-            if (
-              !("value" in after) ||
-              (!after.configurable && !after.writable)
-            ) {
-              state.set(increment);
-              signalMap.delete(key);
-            } else if (
-              !before ||
-              !("value" in before) ||
-              !Object.is(before.value, after.value)
-            ) {
-              state.set(increment);
+          if (isArray && key === "length" && typeof value !== "number") {
+            value = Number(value);
+          }
+
+          const raw = toRaw(value);
+
+          writing = true;
+
+          try {
+            ok = Reflect.set(obj, key, raw, receiver);
+          } finally {
+            writing = prev;
+          }
+
+          if (ok) {
+            if (state && (!hadOwn || !Object.is(oldValue, raw))) {
+              bump(key);
+            }
+
+            if (!hadOwn && !hadKey) {
+              triggerIterate();
+            }
+
+            if (isArray && obj.length !== length) {
+              syncLength(obj, length);
             }
           }
 
-          const changed =
-            before !== undefined &&
-            (before.get !== after.get ||
-              before.set !== after.set ||
-              before.enumerable !== after.enumerable ||
-              "value" in before !== "value" in after);
+          return ok;
+        });
+      },
 
-          if (changed || !hadKey) {
+      deleteProperty(obj, key) {
+        if (key === RAW) {
+          return true;
+        }
+
+        return batch(() => {
+          const hadOwn = hasOwn(obj, key);
+          const deleted = Reflect.deleteProperty(obj, key);
+
+          if (deleted && hadOwn) {
+            bump(key);
+            signalMap.delete(key);
             triggerIterate();
           }
 
-          if (isArray && obj.length !== length) {
-            syncLength(obj, length);
-          }
+          return deleted;
+        });
+      },
+
+      has(obj, key) {
+        if (key === RAW) {
+          return true;
         }
 
-        return ok;
-      });
-    },
-  });
+        const result = Reflect.has(obj, key);
 
-  proxyMap.set(target, proxy);
-  return proxy;
-}
+        if (!result || hasOwn(obj, key)) {
+          let state = signalMap.get(key);
 
-export function notify<T>(value: T, ...keys: PropertyKey[]) {
-  if (isObject(value)) {
-    (value as any)[NOTIFY]?.(keys);
+          if (!state) {
+            if (!tracking()) {
+              return result;
+            }
+
+            const kind = propKind(obj, key);
+
+            if (kind === LOCKED) {
+              return result;
+            }
+
+            if (kind === ACCESSOR) {
+              getSignal(ITERATE).get();
+              return result;
+            }
+
+            state = getSignal(key);
+          }
+
+          state.get();
+        }
+
+        return result;
+      },
+
+      ownKeys(obj) {
+        trackIterate();
+        return Reflect.ownKeys(obj);
+      },
+
+      getOwnPropertyDescriptor(obj, key) {
+        if (!writing && !isBuiltInSymbol(key)) {
+          trackIterate();
+        }
+
+        return Reflect.getOwnPropertyDescriptor(obj, key);
+      },
+
+      defineProperty(obj, key, desc) {
+        if (writing || isBuiltInSymbol(key)) {
+          return Reflect.defineProperty(obj, key, desc);
+        }
+
+        return batch(() => {
+          const before = Object.getOwnPropertyDescriptor(obj, key);
+          const hadKey = key in obj;
+          const isArray = Array.isArray(obj);
+          const length = isArray ? obj.length : 0;
+
+          const ok = Reflect.defineProperty(
+            obj,
+            key,
+            "value" in desc ? { ...desc, value: toRaw(desc.value) } : desc,
+          );
+
+          if (ok) {
+            const after = Object.getOwnPropertyDescriptor(obj, key)!;
+            const state = signalMap.get(key);
+
+            if (state) {
+              if (
+                !("value" in after) ||
+                (!after.configurable && !after.writable)
+              ) {
+                state.set(increment);
+                signalMap.delete(key);
+              } else if (
+                !before ||
+                !("value" in before) ||
+                !Object.is(before.value, after.value)
+              ) {
+                state.set(increment);
+              }
+            }
+
+            const changed =
+              before !== undefined &&
+              (before.get !== after.get ||
+                before.set !== after.set ||
+                before.enumerable !== after.enumerable ||
+                "value" in before !== "value" in after);
+
+            if (changed || !hadKey) {
+              triggerIterate();
+            }
+
+            if (isArray && obj.length !== length) {
+              syncLength(obj, length);
+            }
+          }
+
+          return ok;
+        });
+      },
+    });
+
+    proxyMap.set(target, proxy);
+    return proxy;
   }
-}
 
-export function mutate<T extends object>(
-  obj: T,
-  fn: (obj: T) => PropertyKey | PropertyKey[] | undefined,
-) {
-  batch(() => {
-    const changed = fn(obj);
-
-    if (changed === undefined) {
-      return;
+  function notify<T>(value: T, ...keys: PropertyKey[]) {
+    if (isObject(value)) {
+      (value as any)[NOTIFY]?.(keys);
     }
-
-    if (Array.isArray(changed)) {
-      notify(obj, ...changed);
-    } else {
-      notify(obj, changed);
-    }
-  });
-}
-
-export function toRaw<T>(value: T): T {
-  return isObject(value) ? (value as any)[RAW] || value : value;
-}
-
-function _toRawDeep<T>(value: T, seen: WeakMap<object, unknown>): T {
-  const raw = toRaw(value);
-
-  if (!isObject(raw) || !(Array.isArray(raw) || isPlainObject(raw))) {
-    return raw;
   }
 
-  if (seen.has(raw)) {
-    return seen.get(raw) as T;
-  }
+  function mutate<T extends object>(
+    obj: T,
+    fn: (obj: T) => PropertyKey | PropertyKey[] | undefined,
+  ) {
+    batch(() => {
+      const changed = fn(obj);
 
-  const out = Array.isArray(raw)
-    ? []
-    : Object.create(Object.getPrototypeOf(raw));
+      if (changed === undefined) {
+        return;
+      }
 
-  seen.set(raw, out);
-
-  for (const key of Object.keys(raw)) {
-    Object.defineProperty(out, key, {
-      value: _toRawDeep((raw as any)[key], seen),
-      writable: true,
-      enumerable: true,
-      configurable: true,
+      if (Array.isArray(changed)) {
+        notify(obj, ...changed);
+      } else {
+        notify(obj, changed);
+      }
     });
   }
 
-  if (Array.isArray(raw)) {
-    out.length = raw.length;
+  function toRaw<T>(value: T): T {
+    return isObject(value) ? (value as any)[RAW] || value : value;
   }
 
-  return out;
-}
+  function _toRawDeep<T>(value: T, seen: WeakMap<object, unknown>): T {
+    const raw = toRaw(value);
 
-export function toRawDeep<T>(value: T) {
-  return _toRawDeep<T>(value, new WeakMap<object, unknown>());
+    if (!isObject(raw) || !(Array.isArray(raw) || isPlainObject(raw))) {
+      return raw;
+    }
+
+    if (seen.has(raw)) {
+      return seen.get(raw) as T;
+    }
+
+    const out = Array.isArray(raw)
+      ? []
+      : Object.create(Object.getPrototypeOf(raw));
+
+    seen.set(raw, out);
+
+    for (const key of Object.keys(raw)) {
+      Object.defineProperty(out, key, {
+        value: _toRawDeep((raw as any)[key], seen),
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    }
+
+    if (Array.isArray(raw)) {
+      out.length = raw.length;
+    }
+
+    return out;
+  }
+
+  function toRawDeep<T>(value: T): T {
+    return _toRawDeep<T>(value, new WeakMap<object, unknown>());
+  }
+
+  return { reactive, notify, mutate, toRaw, toRawDeep };
 }
