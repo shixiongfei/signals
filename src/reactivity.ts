@@ -9,28 +9,7 @@
  * https://github.com/shixiongfei/signals
  */
 
-import type { Signal } from "./types.ts";
-
-export interface SignalProvider {
-  signal<T>(initialValue: T): Signal<T>;
-  batch<T>(fn: () => T): T;
-  tracking(): boolean;
-  tracker(): <T>(fn: () => T) => T;
-  untracked<T>(fn: () => T): T;
-}
-
-export interface Reactivity {
-  reactive<T>(target: T): T;
-  notify<T>(value: T, ...keys: PropertyKey[]): void;
-
-  mutate<T extends object>(
-    obj: T,
-    fn: (obj: T) => PropertyKey | PropertyKey[] | undefined,
-  ): void;
-
-  toRaw<T>(value: T): T;
-  toRawDeep<T>(value: T): T;
-}
+import type { ReactivityProvider, Signal, SignalProvider } from "./types.ts";
 
 const builtInSymbols = new Set(
   Object.getOwnPropertyNames(Symbol)
@@ -103,7 +82,7 @@ export function createReactivity({
   tracker,
   tracking,
   untracked,
-}: SignalProvider): Reactivity {
+}: SignalProvider): ReactivityProvider {
   const RAW = Symbol("RAW");
   const ITERATE = Symbol("ITERATE");
   const NOTIFY = Symbol("NOTIFY");

@@ -12,7 +12,8 @@
   },
   "exports": {
     ".": "./dist/index.js",
-    "./reactivity": "./dist/reactivity.js"
+    "./reactivity": "./dist/reactivity.js",
+    "./tests": "./dist/tests.js"
   },
   "repository": {
     "type": "git",
