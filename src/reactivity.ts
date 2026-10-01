@@ -1,5 +1,5 @@
 /*
- * reactive.ts
+ * reactivity.ts
  *
  * Copyright (c) 2026 Xiongfei Shi
  *
@@ -10,7 +10,7 @@
  */
 
 import { batch, signal, tracker, tracking, untracked } from "./signals.ts";
-import type { Signal } from "./signals.ts";
+import type { Signal } from "./types.ts";
 
 const RAW = Symbol("RAW");
 const ITERATE = Symbol("ITERATE");

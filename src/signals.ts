@@ -10,13 +10,7 @@
  */
 
 import * as alien from "alien-signals";
-
-export type SignalGetter<T> = { get: () => T };
-export type SignalSetterFn<T> = (previousValue: T) => T;
-export type SignalSetter<T> = { set: (value: T | SignalSetterFn<T>) => void };
-export type Signal<T> = SignalGetter<T> & SignalSetter<T>;
-export type ReadonlySignal<T> = SignalGetter<T>;
-export type Computed<T> = ReadonlySignal<T>;
+import type { Computed, Signal, SignalSetterFn } from "./types.ts";
 
 export function signal<T>(initialValue: T): Signal<T> {
   const state = alien.signal(initialValue);

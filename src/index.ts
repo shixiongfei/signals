@@ -9,10 +9,12 @@
  * https://github.com/shixiongfei/signals
  */
 
+export * from "./types.ts";
 export * from "./signals.ts";
-export * from "./reactive.ts";
+export * from "./reactivity.ts";
 
+import * as types from "./types.ts";
 import * as signals from "./signals.ts";
-import * as reactive from "./reactive.ts";
+import * as reactivity from "./reactivity.ts";
 
-export default { ...signals, ...reactive };
+export default { ...types, ...signals, ...reactivity };
