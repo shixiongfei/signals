@@ -12,6 +12,7 @@
   },
   "exports": {
     ".": "./dist/index.js",
+    "./signals": "./dist/signals.js",
     "./reactivity": "./dist/reactivity.js",
     "./tests": "./dist/tests.js"
   },
