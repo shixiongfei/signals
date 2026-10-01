@@ -38,7 +38,7 @@ export function effectScope(fn: () => void) {
   return alien.effectScope(fn);
 }
 
-export function batch<T>(fn: () => T) {
+export function batch<T>(fn: () => T): T {
   alien.startBatch();
   try {
     return fn();
