@@ -10,6 +10,10 @@
     "test": "tsc && node ./dist/index.test.js",
     "coverage": "node --test --experimental-test-coverage"
   },
+  "exports": {
+    ".": "./dist/index.js",
+    "./reactivity": "./dist/reactivity.js"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/shixiongfei/signals.git"
@@ -34,7 +38,7 @@
   },
   "homepage": "https://github.com/shixiongfei/signals#readme",
   "devDependencies": {
-    "@types/node": "^22.20.3",
+    "@types/node": "^22.20.4",
     "typescript": "^7.0.2"
   },
   "dependencies": {
