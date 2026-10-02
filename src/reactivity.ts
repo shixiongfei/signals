@@ -474,25 +474,6 @@ export function createReactivity({
     }
   }
 
-  function mutate<T extends object>(
-    obj: T,
-    fn: (obj: T) => PropertyKey | PropertyKey[] | undefined,
-  ) {
-    batch(() => {
-      const changed = fn(obj);
-
-      if (changed === undefined) {
-        return;
-      }
-
-      if (Array.isArray(changed)) {
-        notify(obj, ...changed);
-      } else {
-        notify(obj, changed);
-      }
-    });
-  }
-
   function toRaw<T>(value: T): T {
     return isObject(value) ? (value as any)[RAW] || value : value;
   }
@@ -534,5 +515,5 @@ export function createReactivity({
     return _toRawDeep<T>(value, new WeakMap<object, unknown>());
   }
 
-  return { reactive, notify, mutate, toRaw, toRawDeep };
+  return { reactive, notify, toRaw, toRawDeep };
 }

@@ -28,12 +28,6 @@ export interface SignalProvider {
 export interface ReactivityProvider {
   reactive<T>(target: T): T;
   notify<T>(value: T, ...keys: PropertyKey[]): void;
-
-  mutate<T extends object>(
-    obj: T,
-    fn: (obj: T) => PropertyKey | PropertyKey[] | undefined,
-  ): void;
-
   toRaw<T>(value: T): T;
   toRawDeep<T>(value: T): T;
 }

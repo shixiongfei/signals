@@ -20,7 +20,6 @@ const reactivity = createReactivity(signals);
 
 export const reactive = reactivity.reactive;
 export const notify = reactivity.notify;
-export const mutate = reactivity.mutate;
 export const toRaw = reactivity.toRaw;
 export const toRawDeep = reactivity.toRawDeep;
 
