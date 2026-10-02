@@ -23,7 +23,6 @@ export interface SignalProvider {
   batch<T>(fn: () => T): T;
   tracking(): boolean;
   untracked<T>(fn: () => T): T;
-  trigger(fn: () => void): void;
 }
 
 export interface ReactivityProvider {

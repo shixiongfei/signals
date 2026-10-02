@@ -55,7 +55,3 @@ export function untracked<T>(fn: () => T): T {
     alien.setActiveSub(sub);
   }
 }
-
-export function trigger(fn: () => void) {
-  alien.trigger(fn);
-}

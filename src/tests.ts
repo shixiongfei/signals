@@ -114,28 +114,6 @@ export function signalsTestSuites(signals: TestSuiteProvider) {
       dispose1();
       dispose2();
     });
-
-    test("test trigger", () => {
-      const src1 = signals.signal<number[]>([]);
-      const src2 = signals.signal<number[]>([]);
-      const total = signals.computed(
-        () => src1.get().length + src2.get().length,
-      );
-
-      assert.strictEqual(total.get(), 0);
-
-      src1.get().push(1);
-      src2.get().push(2);
-
-      assert.strictEqual(total.get(), 0);
-
-      signals.trigger(() => {
-        src1.get();
-        src2.get();
-      });
-
-      assert.strictEqual(total.get(), 2);
-    });
   });
 }
 
