@@ -79,7 +79,6 @@ const increment = (version: number) => version + 1;
 export function createReactivity({
   batch,
   signal,
-  tracker,
   tracking,
   untracked,
 }: SignalProvider): ReactivityProvider {
@@ -207,19 +206,12 @@ export function createReactivity({
               if (!fn) {
                 const method = Reflect.get(obj, key, receiver) as Function;
 
-                fn = (...args: any[]) => {
-                  if (key === "sort" && typeof args[0] === "function") {
-                    const tracked = tracker();
-                    const compare = args[0];
-
-                    args[0] = (a: unknown, b: unknown) =>
-                      tracked(() => compare(a, b));
-                  }
-
-                  return batch(() =>
-                    untracked(() => Reflect.apply(method, receiver, args)),
+                fn = (...args: any[]) =>
+                  batch(() =>
+                    key === "sort" && typeof args[0] === "function"
+                      ? Reflect.apply(method, receiver, args)
+                      : untracked(() => Reflect.apply(method, receiver, args)),
                   );
-                };
 
                 functionMap.set(key, fn);
               }

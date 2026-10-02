@@ -51,19 +51,6 @@ export function tracking() {
   return alien.getActiveSub() !== undefined;
 }
 
-export function tracker() {
-  const sub = alien.getActiveSub();
-
-  return <T>(fn: () => T): T => {
-    const prev = alien.setActiveSub(sub);
-    try {
-      return fn();
-    } finally {
-      alien.setActiveSub(prev);
-    }
-  };
-}
-
 export function untracked<T>(fn: () => T): T {
   const sub = alien.setActiveSub(undefined);
   try {

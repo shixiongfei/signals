@@ -23,7 +23,6 @@ export interface SignalProvider {
   effectScope(fn: () => void): () => void;
   batch<T>(fn: () => T): T;
   tracking(): boolean;
-  tracker(): <T>(fn: () => T) => T;
   untracked<T>(fn: () => T): T;
   trigger(fn: () => void): void;
 }
