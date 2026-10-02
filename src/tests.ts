@@ -58,29 +58,10 @@ export function signalsTestSuites(signals: TestSuiteProvider) {
 
       output.splice(0, output.length);
 
-      count.set(0);
-      const dispose2 = signals.effectScope(() => {
-        signals.effect(() => {
-          output.push(count.get() * 3);
-        });
-      });
-
-      count.set(2);
-      assert.deepStrictEqual(output, [0, 6]);
-
-      count.set(3);
-      assert.deepStrictEqual(output, [0, 6, 9]);
-
-      dispose2();
-      count.set(4);
-      assert.deepStrictEqual(output, [0, 6, 9]);
-
-      output.splice(0, output.length);
-
       const show = signals.signal(true);
 
       count.set(0);
-      const dispose3 = signals.effect(() => {
+      const dispose2 = signals.effect(() => {
         if (show.get()) {
           signals.effect(() => {
             output.push(count.get());
@@ -103,7 +84,7 @@ export function signalsTestSuites(signals: TestSuiteProvider) {
       count.set(5);
       assert.deepStrictEqual(output, [0, 2, 0, 5]);
 
-      dispose3();
+      dispose2();
       output.splice(0, output.length);
     });
 

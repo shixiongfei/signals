@@ -20,7 +20,6 @@ export interface SignalProvider {
   signal<T>(initialValue: T): Signal<T>;
   computed<T>(fn: () => T): Computed<T>;
   effect(fn: () => void): () => void;
-  effectScope(fn: () => void): () => void;
   batch<T>(fn: () => T): T;
   tracking(): boolean;
   untracked<T>(fn: () => T): T;
