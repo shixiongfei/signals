@@ -319,6 +319,7 @@ describe("Reactive Unit Test", () => {
     const sig = signals.signal(fn1);
     const holder = signals.reactive({ sig });
 
+    assert.strictEqual(holder.sig, sig);
     assert.strictEqual(holder.sig.get(), fn1);
 
     holder.sig.set(fn2);
