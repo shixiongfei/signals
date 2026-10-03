@@ -11,7 +11,7 @@
 
 import * as alien from "alien-signals";
 
-const BRAND_SYMBOL = Symbol.for("shixiongfei-signals");
+const BRAND_SYMBOL = Symbol.for("SHIXIONGFEI-SIGNALS");
 
 type SignalGetter<T> = {
   get: () => T;
