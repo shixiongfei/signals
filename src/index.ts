@@ -9,18 +9,10 @@
  * https://github.com/shixiongfei/signals
  */
 
-export * from "./types.ts";
 export * from "./signals.ts";
+export * from "./reactivity.ts";
 
-import * as types from "./types.ts";
 import * as signals from "./signals.ts";
-import { createReactivity } from "./reactivity.ts";
+import * as reactivity from "./reactivity.ts";
 
-const reactivity = createReactivity(signals);
-
-export const reactive = reactivity.reactive;
-export const notify = reactivity.notify;
-export const toRaw = reactivity.toRaw;
-export const toRawDeep = reactivity.toRawDeep;
-
-export default { ...types, ...signals, ...reactivity };
+export default { ...signals, ...reactivity };
