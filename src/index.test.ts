@@ -152,7 +152,7 @@ describe("Signals Unit Test", () => {
 
     const fnA = () => 1;
     const fnB = () => 2;
-    const fnSig = signals.signal<() => number>(fnA);
+    const fnSig = signals.signal(fnA);
     const fnOut: unknown[] = [];
 
     const dispose3 = signals.effect(() => {
@@ -241,7 +241,9 @@ describe("Reactive Unit Test", () => {
     const output: number[] = [];
     const obj = { count: 0, arr: [-100] };
     const observed = signals.reactive(obj);
+    const number = signals.reactive(123);
 
+    assert.strictEqual(typeof number, "number");
     assert.strictEqual(observed === signals.reactive(obj), true);
     assert.strictEqual(observed === signals.reactive(observed), true);
     assert.strictEqual(observed.arr === signals.reactive(observed.arr), true);

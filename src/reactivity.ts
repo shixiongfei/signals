@@ -18,8 +18,6 @@ import {
   untracked,
 } from "./signals.ts";
 
-export type Reactive<T> = T;
-
 const RAW = Symbol("RAW");
 const ITERATE = Symbol("ITERATE");
 const NOTIFY = Symbol("NOTIFY");
@@ -67,6 +65,9 @@ const isProxiable = (value: unknown): value is object =>
   !Object.isFrozen(value) &&
   !isReadableSignal(value);
 
+export const isReactive = <T>(value: unknown) =>
+  isObject(value) && (value as any)[RAW] !== undefined;
+
 const hasOwn =
   Object.hasOwn ||
   ((obj: object, key: PropertyKey) =>
@@ -92,10 +93,7 @@ const propKind = (obj: object, key: PropertyKey) => {
 
 const increment = (version: number) => version + 1;
 
-export const isReactive = <T>(value: unknown): value is Reactive<T> =>
-  isObject(value) && (value as any)[RAW] !== undefined;
-
-export function reactive<T>(target: T): Reactive<T> {
+export function reactive<T>(target: T): T {
   if (!isProxiable(target)) {
     return target;
   }
@@ -471,7 +469,7 @@ export function reactive<T>(target: T): Reactive<T> {
   return proxy;
 }
 
-export function notify<T>(value: Reactive<T>, ...keys: PropertyKey[]) {
+export function notify<T>(value: T, ...keys: PropertyKey[]) {
   if (isObject(value)) {
     const notify = (value as any)[NOTIFY];
 
@@ -481,7 +479,7 @@ export function notify<T>(value: Reactive<T>, ...keys: PropertyKey[]) {
   }
 }
 
-export function toRaw<T>(value: Reactive<T>): T {
+export function toRaw<T>(value: T): T {
   return isObject(value) ? (value as any)[RAW] || value : value;
 }
 
@@ -518,6 +516,6 @@ function _toRawDeep<T>(value: T, seen: WeakMap<object, unknown>): T {
   return out;
 }
 
-export function toRawDeep<T>(value: Reactive<T>): T {
+export function toRawDeep<T>(value: T): T {
   return _toRawDeep<T>(value, new WeakMap<object, unknown>());
 }
