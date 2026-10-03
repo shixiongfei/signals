@@ -94,11 +94,7 @@ const propKind = (obj: object, key: PropertyKey) => {
 const increment = (version: number) => version + 1;
 
 export function reactive<T>(target: T): T {
-  if (!isProxiable(target)) {
-    return target;
-  }
-
-  if ((target as any)[RAW] !== undefined) {
+  if (isReactive(target) || !isProxiable(target)) {
     return target;
   }
 
