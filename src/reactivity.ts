@@ -65,7 +65,7 @@ const isProxiable = (value: unknown): value is object =>
   !Object.isFrozen(value) &&
   !isReadableSignal(value);
 
-export const isReactive = <T>(value: unknown) =>
+export const isReactive = (value: unknown) =>
   isObject(value) && (value as any)[RAW] !== undefined;
 
 const hasOwn =
@@ -300,7 +300,6 @@ export function reactive<T>(target: T): T {
 
       return batch(() => {
         const hadOwn = hasOwn(obj, key);
-        const hadKey = key in obj;
         const isArray = Array.isArray(obj);
         const length = isArray ? obj.length : 0;
         const state = signalMap.get(key);
@@ -327,7 +326,7 @@ export function reactive<T>(target: T): T {
             bump(key);
           }
 
-          if (!hadOwn && !hadKey) {
+          if (!hadOwn && hasOwn(obj, key)) {
             triggerIterate();
           }
 
@@ -414,7 +413,6 @@ export function reactive<T>(target: T): T {
 
       return batch(() => {
         const before = Object.getOwnPropertyDescriptor(obj, key);
-        const hadKey = key in obj;
         const isArray = Array.isArray(obj);
         const length = isArray ? obj.length : 0;
 
@@ -451,7 +449,7 @@ export function reactive<T>(target: T): T {
               before.enumerable !== after.enumerable ||
               "value" in before !== "value" in after);
 
-          if (changed || !hadKey) {
+          if (changed || !before) {
             triggerIterate();
           }
 

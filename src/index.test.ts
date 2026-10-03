@@ -1562,6 +1562,21 @@ describe("Reactive Structure Unit Test", () => {
     assert.deepStrictEqual(output, [["foo"], ["foo", "bar"], ["bar"]]);
   });
 
+  test("Object.keys should react when an own key shadows Object.prototype member", () => {
+    const output: string[][] = [];
+    const observed = signals.reactive<any>({});
+
+    const dispose = signals.effect(() => {
+      output.push(Object.keys(observed));
+    });
+
+    observed.toString = () => "x";
+
+    dispose();
+
+    assert.deepStrictEqual(output, [[], ["toString"]]);
+  });
+
   test("Object.entries should react to structural changes", () => {
     const output: [string, unknown][][] = [];
 
