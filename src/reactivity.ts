@@ -469,10 +469,10 @@ export function reactive<T>(target: T): T {
 
 export function notify<T>(value: T, ...keys: PropertyKey[]) {
   if (isObject(value)) {
-    const notify = (value as any)[NOTIFY];
+    const fn = (value as any)[NOTIFY];
 
-    if (notify) {
-      notify(keys);
+    if (fn) {
+      fn(keys);
     }
   }
 }
