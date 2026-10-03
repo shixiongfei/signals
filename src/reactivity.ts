@@ -9,10 +9,10 @@
  * https://github.com/shixiongfei/signals
  */
 
+import { capture } from "./internal.ts";
 import type { Signal } from "./signals.ts";
 import {
   batch,
-  capture,
   isReadableSignal,
   signal,
   tracking,

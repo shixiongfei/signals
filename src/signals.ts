@@ -74,20 +74,6 @@ export function tracking() {
   return alien.getActiveSub() !== undefined;
 }
 
-export function capture<T, A extends unknown[]>(fn: (...args: A) => T) {
-  const sub = alien.getActiveSub();
-
-  return (...args: A) => {
-    const prev = alien.setActiveSub(sub);
-
-    try {
-      return fn(...args);
-    } finally {
-      alien.setActiveSub(prev);
-    }
-  };
-}
-
 export function untracked<T>(fn: () => T): T {
   const sub = alien.setActiveSub(undefined);
   try {
