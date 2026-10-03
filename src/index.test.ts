@@ -539,6 +539,22 @@ describe("Reactive Unit Test", () => {
     assert.strictEqual(runs, 1);
   });
 
+  test("sort(fn) inside effect should not subscribe to the array itself", () => {
+    const observed = signals.reactive({ list: [3, 1, 2] });
+    let runs = 0;
+
+    const dispose = signals.effect(() => {
+      runs++;
+      observed.list.sort((a, b) => a - b);
+    });
+
+    observed.list.push(0);
+
+    dispose();
+
+    assert.strictEqual(runs, 1);
+  });
+
   test("test reactive array - callbacks of non-mutating array methods inside effect are tracked", () => {
     const output: number[][] = [];
     const observed = signals.reactive({ list: [1, 2, 3], factor: 1 });
@@ -913,6 +929,7 @@ describe("Reactive Unit Test", () => {
     dispose();
 
     assert.deepStrictEqual(output, [1]);
+    assert.strictEqual(signals.isReactive(observed), false);
   });
 
   test("test reactive - missing property should create dependency", () => {
@@ -1009,6 +1026,7 @@ describe("Reactive Unit Test", () => {
     dispose();
 
     assert.deepStrictEqual(output, [1]);
+    assert.strictEqual(signals.isReactive(observed), false);
   });
 
   test("test reactive - should not react to change and delete prototype property", () => {
@@ -1028,6 +1046,7 @@ describe("Reactive Unit Test", () => {
     dispose();
 
     assert.deepStrictEqual(output, [1]);
+    assert.strictEqual(signals.isReactive(observed), false);
   });
 
   test("test reactive - delete array index", () => {
@@ -1401,6 +1420,7 @@ describe("Reactive Structure Unit Test", () => {
     dispose();
 
     assert.deepStrictEqual(output, [["foo"]]);
+    assert.strictEqual(signals.isReactive(observed), false);
   });
 
   test("for...in should not react to prototype property deleted", () => {
@@ -1423,6 +1443,7 @@ describe("Reactive Structure Unit Test", () => {
     dispose();
 
     assert.deepStrictEqual(output, [["foo"]]);
+    assert.strictEqual(signals.isReactive(observed), false);
   });
 
   test("for...in and property value dependency should run once", () => {

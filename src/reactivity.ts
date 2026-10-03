@@ -12,6 +12,7 @@
 import type { Signal } from "./signals.ts";
 import {
   batch,
+  capture,
   isReadableSignal,
   signal,
   tracking,
@@ -207,12 +208,15 @@ export function reactive<T>(target: T): T {
             if (!fn) {
               const method = Reflect.get(obj, key, receiver) as Function;
 
-              fn = (...args: any[]) =>
-                batch(() =>
-                  key === "sort" && typeof args[0] === "function"
-                    ? Reflect.apply(method, receiver, args)
-                    : untracked(() => Reflect.apply(method, receiver, args)),
+              fn = (...args: any[]) => {
+                if (key === "sort" && typeof args[0] === "function") {
+                  args[0] = capture(args[0]);
+                }
+
+                return batch(() =>
+                  untracked(() => Reflect.apply(method, receiver, args)),
                 );
+              };
 
               functionMap.set(key, fn);
             }
