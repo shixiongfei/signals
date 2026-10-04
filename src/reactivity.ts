@@ -9,7 +9,7 @@
  * https://github.com/shixiongfei/signals
  */
 
-import { BRAND_SYMBOL, capture, tracking } from "./internal.ts";
+import { BRAND_SYMBOL, capture, isObject, tracking } from "./internal.ts";
 import { batch, signal, untracked } from "./signals.ts";
 import type { Signal } from "./signals.ts";
 
@@ -46,9 +46,6 @@ const arraySearches = new Set<PropertyKey>([
 const isBuiltInSymbol = (key: PropertyKey) =>
   typeof key === "symbol" && builtInSymbols.has(key);
 
-const isObject = (value: unknown): value is object =>
-  value !== null && typeof value === "object";
-
 const isPlainObject = (value: object) => {
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
@@ -59,9 +56,6 @@ const isProxiable = (value: unknown) =>
   (Array.isArray(value) || isPlainObject(value)) &&
   !Object.isFrozen(value) &&
   (value as any)[BRAND_SYMBOL] === undefined;
-
-export const isReactive = (value: unknown) =>
-  isObject(value) && (value as any)[BRAND_SYMBOL] === "reactive";
 
 const isBrandSymbol = (key: PropertyKey) =>
   key === RAW || key === BRAND_SYMBOL || key === NOTIFY;
@@ -90,6 +84,9 @@ const propKind = (obj: object, key: PropertyKey) => {
 };
 
 const increment = (version: number) => version + 1;
+
+export const isReactive = (value: unknown) =>
+  isObject(value) && (value as any)[BRAND_SYMBOL] === "reactive";
 
 export function reactive<T>(target: T): T {
   if (!isObject(target) || Object.isFrozen(target)) {

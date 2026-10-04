@@ -10,7 +10,7 @@
  */
 
 import * as alien from "alien-signals";
-import { BRAND_SYMBOL } from "./internal.ts";
+import { BRAND_SYMBOL, isObject } from "./internal.ts";
 
 type SignalGetter<T> = {
   get: () => T;
@@ -79,25 +79,17 @@ export function untracked<T>(fn: () => T): T {
 }
 
 export function isSignal<T>(value: unknown): value is Signal<T> {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    (value as any)[BRAND_SYMBOL] === "signal"
-  );
+  return isObject(value) && (value as any)[BRAND_SYMBOL] === "signal";
 }
 
 export function isComputed<T>(value: unknown): value is Computed<T> {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    (value as any)[BRAND_SYMBOL] === "computed"
-  );
+  return isObject(value) && (value as any)[BRAND_SYMBOL] === "computed";
 }
 
 export function isReadableSignal<T>(
   value: unknown,
 ): value is ReadonlySignal<T> {
-  if (value === null || typeof value !== "object") {
+  if (!isObject(value)) {
     return false;
   }
 
