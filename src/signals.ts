@@ -10,8 +10,7 @@
  */
 
 import * as alien from "alien-signals";
-
-const BRAND_SYMBOL = Symbol.for("SHIXIONGFEI-SIGNALS");
+import { BRAND_SYMBOL } from "./internal.ts";
 
 type SignalGetter<T> = {
   get: () => T;
@@ -68,10 +67,6 @@ export function batch<T>(fn: () => T): T {
   } finally {
     alien.endBatch();
   }
-}
-
-export function tracking() {
-  return alien.getActiveSub() !== undefined;
 }
 
 export function untracked<T>(fn: () => T): T {

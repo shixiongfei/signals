@@ -9,15 +9,9 @@
  * https://github.com/shixiongfei/signals
  */
 
-import { capture } from "./internal.ts";
+import { BRAND_SYMBOL, capture, tracking } from "./internal.ts";
+import { batch, signal, untracked } from "./signals.ts";
 import type { Signal } from "./signals.ts";
-import {
-  batch,
-  isReadableSignal,
-  signal,
-  tracking,
-  untracked,
-} from "./signals.ts";
 
 const RAW = Symbol("RAW");
 const ITERATE = Symbol("ITERATE");
@@ -64,10 +58,13 @@ const isProxiable = (value: unknown): value is object =>
   isObject(value) &&
   (Array.isArray(value) || isPlainObject(value)) &&
   !Object.isFrozen(value) &&
-  !isReadableSignal(value);
+  (value as any)[BRAND_SYMBOL] === undefined;
 
 export const isReactive = (value: unknown) =>
-  isObject(value) && (value as any)[RAW] !== undefined;
+  isObject(value) && (value as any)[BRAND_SYMBOL] === "reactive";
+
+const isBrandSymbol = (key: PropertyKey) =>
+  key === RAW || key === BRAND_SYMBOL || key === NOTIFY;
 
 const hasOwn =
   Object.hasOwn ||
@@ -171,6 +168,10 @@ export function reactive<T>(target: T): T {
 
   const proxy = new Proxy(target, {
     get(obj, key, receiver) {
+      if (key === BRAND_SYMBOL) {
+        return "reactive";
+      }
+
       if (key === RAW) {
         return obj;
       }
@@ -290,7 +291,7 @@ export function reactive<T>(target: T): T {
     },
 
     set(obj, key, value, receiver) {
-      if (key === RAW) {
+      if (isBrandSymbol(key)) {
         return true;
       }
 
@@ -340,7 +341,7 @@ export function reactive<T>(target: T): T {
     },
 
     deleteProperty(obj, key) {
-      if (key === RAW) {
+      if (isBrandSymbol(key)) {
         return true;
       }
 
@@ -359,7 +360,7 @@ export function reactive<T>(target: T): T {
     },
 
     has(obj, key) {
-      if (key === RAW) {
+      if (isBrandSymbol(key)) {
         return true;
       }
 

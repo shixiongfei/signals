@@ -11,6 +11,8 @@
 
 import * as alien from "alien-signals";
 
+export const BRAND_SYMBOL = Symbol.for("SHIXIONGFEI-SIGNALS");
+
 export function capture<T, A extends unknown[]>(fn: (...args: A) => T) {
   const sub = alien.getActiveSub();
 
@@ -23,4 +25,8 @@ export function capture<T, A extends unknown[]>(fn: (...args: A) => T) {
       alien.setActiveSub(prev);
     }
   };
+}
+
+export function tracking() {
+  return alien.getActiveSub() !== undefined;
 }
