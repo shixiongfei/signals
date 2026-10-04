@@ -129,16 +129,6 @@ export function reactive<T>(target: T): T {
     }
   };
 
-  const triggerIterate = () => {
-    bump(ITERATE);
-  };
-
-  const trackIterate = () => {
-    if (tracking()) {
-      getSignal(ITERATE).get();
-    }
-  };
-
   const syncLength = (obj: any[], length: number) => {
     bump("length");
 
@@ -166,7 +156,7 @@ export function reactive<T>(target: T): T {
     }
 
     if (obj.length < length) {
-      triggerIterate();
+      bump(ITERATE);
     }
   };
 
@@ -185,7 +175,7 @@ export function reactive<T>(target: T): T {
           notifyFn = (keys: PropertyKey[]) =>
             batch(() => {
               if (keys.length === 0) {
-                triggerIterate();
+                bump(ITERATE);
                 return;
               }
 
@@ -203,11 +193,11 @@ export function reactive<T>(target: T): T {
 
       if (!hasOwn(obj, key)) {
         if (Array.isArray(obj)) {
-          if (!functionMap) {
-            functionMap = new Map();
-          }
-
           if (arrayMutations.has(key)) {
+            if (!functionMap) {
+              functionMap = new Map();
+            }
+
             let fn = functionMap.get(key);
 
             if (!fn) {
@@ -230,6 +220,10 @@ export function reactive<T>(target: T): T {
           }
 
           if (arraySearches.has(key)) {
+            if (!functionMap) {
+              functionMap = new Map();
+            }
+
             let fn = functionMap.get(key);
 
             if (!fn) {
@@ -332,7 +326,7 @@ export function reactive<T>(target: T): T {
           }
 
           if (!hadOwn && hasOwn(obj, key)) {
-            triggerIterate();
+            bump(ITERATE);
           }
 
           if (isArray && obj.length !== length) {
@@ -356,7 +350,7 @@ export function reactive<T>(target: T): T {
         if (deleted && hadOwn) {
           bump(key);
           signalMap.delete(key);
-          triggerIterate();
+          bump(ITERATE);
         }
 
         return deleted;
@@ -399,15 +393,18 @@ export function reactive<T>(target: T): T {
     },
 
     ownKeys(obj) {
-      trackIterate();
+      if (tracking()) {
+        getSignal(ITERATE).get();
+      }
       return Reflect.ownKeys(obj);
     },
 
     getOwnPropertyDescriptor(obj, key) {
       if (!writing && !isBuiltInSymbol(key)) {
-        trackIterate();
+        if (tracking()) {
+          getSignal(ITERATE).get();
+        }
       }
-
       return Reflect.getOwnPropertyDescriptor(obj, key);
     },
 
@@ -455,7 +452,7 @@ export function reactive<T>(target: T): T {
               "value" in before !== "value" in after);
 
           if (changed || !before) {
-            triggerIterate();
+            bump(ITERATE);
           }
 
           if (isArray && obj.length !== length) {
