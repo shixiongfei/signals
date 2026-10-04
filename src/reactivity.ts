@@ -54,7 +54,7 @@ const isPlainObject = (value: object) => {
   return proto === Object.prototype || proto === null;
 };
 
-const isProxiable = (value: unknown): value is object =>
+const isProxiable = (value: unknown) =>
   isObject(value) &&
   (Array.isArray(value) || isPlainObject(value)) &&
   !Object.isFrozen(value) &&
@@ -92,7 +92,15 @@ const propKind = (obj: object, key: PropertyKey) => {
 const increment = (version: number) => version + 1;
 
 export function reactive<T>(target: T): T {
-  if (isReactive(target) || !isProxiable(target)) {
+  if (!isObject(target) || Object.isFrozen(target)) {
+    return target;
+  }
+
+  if (!Array.isArray(target) && !isPlainObject(target)) {
+    return target;
+  }
+
+  if ((target as any)[BRAND_SYMBOL] !== undefined) {
     return target;
   }
 
