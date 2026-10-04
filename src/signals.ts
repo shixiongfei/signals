@@ -33,7 +33,9 @@ export type Computed<T> = SignalGetter<T> & {
   readonly [BRAND_SYMBOL]: "computed";
 };
 
-export type Effect = { (): void } & { readonly [BRAND_SYMBOL]: "effect" };
+export type Effect = { (): void } & {
+  readonly [BRAND_SYMBOL]: "effect";
+};
 
 export function signal<T>(initialValue: T): Signal<T> {
   const state = alien.signal(initialValue);
@@ -41,22 +43,18 @@ export function signal<T>(initialValue: T): Signal<T> {
   const peek = () => untracked<T>(state);
   const set = (value: T) => state(value);
   const update = (fn: (previousValue: T) => T) => state(fn(peek()));
-
   return { get, peek, set, update, [BRAND_SYMBOL]: "signal" };
 }
 
 export function computed<T>(fn: () => T): Computed<T> {
   const get = alien.computed(fn);
   const peek = () => untracked<T>(get);
-
   return { get, peek, [BRAND_SYMBOL]: "computed" };
 }
 
 export function effect(fn: () => void): Effect {
   const dispose = alien.effect(fn);
-
   Object.defineProperty(dispose, BRAND_SYMBOL, { value: "effect" });
-
   return dispose as Effect;
 }
 

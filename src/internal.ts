@@ -21,7 +21,6 @@ export function capture<T, A extends unknown[]>(fn: (...args: A) => T) {
 
   return (...args: A) => {
     const prev = alien.setActiveSub(sub);
-
     try {
       return fn(...args);
     } finally {
