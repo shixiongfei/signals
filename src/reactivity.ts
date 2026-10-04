@@ -10,8 +10,7 @@
  */
 
 import { BRAND_SYMBOL, capture, isObject, tracking } from "./internal.ts";
-import { batch, signal, untracked } from "./signals.ts";
-import type { Signal } from "./signals.ts";
+import { batch, signal, untracked, type Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
 const ITERATE = Symbol("ITERATE");
