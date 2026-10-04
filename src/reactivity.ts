@@ -18,12 +18,6 @@ const NOTIFY = Symbol("NOTIFY");
 
 const proxyMap = new WeakMap<object, object>();
 
-const builtInSymbols = new Set(
-  Object.getOwnPropertyNames(Symbol)
-    .map((k) => (Symbol as any)[k])
-    .filter((v) => typeof v === "symbol"),
-);
-
 const arrayMutations = new Set<PropertyKey>([
   "push",
   "pop",
@@ -41,6 +35,12 @@ const arraySearches = new Set<PropertyKey>([
   "lastIndexOf",
   "includes",
 ]);
+
+const builtInSymbols = new Set(
+  Object.getOwnPropertyNames(Symbol)
+    .map((k) => (Symbol as any)[k])
+    .filter((v) => typeof v === "symbol"),
+);
 
 const isBuiltInSymbol = (key: PropertyKey) =>
   typeof key === "symbol" && builtInSymbols.has(key);
@@ -203,15 +203,13 @@ export function reactive<T>(target: T): T {
             if (!fn) {
               const method = Reflect.get(obj, key, receiver) as Function;
 
-              fn = (...args: any[]) => {
-                if (key === "sort" && typeof args[0] === "function") {
-                  args[0] = capture(args[0]);
-                }
-
-                return batch(() =>
-                  untracked(() => Reflect.apply(method, receiver, args)),
-                );
-              };
+              fn = (...args: any[]) =>
+                batch(() => {
+                  if (key === "sort" && typeof args[0] === "function") {
+                    args[0] = capture(args[0]);
+                  }
+                  return untracked(() => Reflect.apply(method, receiver, args));
+                });
 
               functionMap.set(key, fn);
             }
