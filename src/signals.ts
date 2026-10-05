@@ -76,8 +76,11 @@ export const peek = <T>(getter: Signal<T> | Computed<T>) => {
   return untracked(getter);
 };
 
-export const update = <T>(state: Signal<T>, fn: (previousValue: T) => T) => {
-  state(fn(untracked(state)));
+export const update = <T>(
+  state: Signal<T>,
+  setter: (previousValue: T) => T,
+) => {
+  state(setter(untracked(state)));
 };
 
 export function isSignal<T>(value: unknown): value is Signal<T> {
