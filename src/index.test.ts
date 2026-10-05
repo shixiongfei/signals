@@ -16,20 +16,22 @@ import signals from "./index.ts";
 describe("Signals Unit Test", () => {
   test("test signal", () => {
     const count = signals.signal(0);
+    const state = signals.signal<number | undefined>();
 
-    assert.strictEqual(count.get(), 0);
-    assert.strictEqual(count.peek(), 0);
+    assert.strictEqual(state(), undefined);
+    assert.strictEqual(count(), 0);
+    assert.strictEqual(signals.peek(count), 0);
 
-    count.set(1);
-    assert.strictEqual(count.get(), 1);
+    count(1);
+    assert.strictEqual(count(), 1);
 
-    count.update((n) => n + 1);
-    assert.strictEqual(count.get(), 2);
+    signals.update(count, (n) => n + 1);
+    assert.strictEqual(count(), 2);
 
-    count.update((n) => n * 10);
-    count.update((n) => n + 1);
-    assert.strictEqual(count.get(), 21);
-    assert.strictEqual(count.peek(), 21);
+    signals.update(count, (n) => n * 10);
+    signals.update(count, (n) => n + 1);
+    assert.strictEqual(count(), 21);
+    assert.strictEqual(signals.peek(count), 21);
 
     assert.strictEqual(signals.isSignal(count), true);
     assert.strictEqual(signals.isComputed(count), false);
@@ -53,36 +55,36 @@ describe("Signals Unit Test", () => {
 
     const fn = signals.signal(f1);
 
-    assert.strictEqual(fn.get(), f1);
+    assert.strictEqual(fn(), f1);
 
-    fn.set(f2);
+    fn(f2);
 
-    assert.strictEqual(fn.get(), f2);
-    assert.strictEqual(fn.peek(), f2);
+    assert.strictEqual(fn(), f2);
+    assert.strictEqual(signals.peek(fn), f2);
     assert.strictEqual(calls, 0);
 
     let received: unknown;
 
-    fn.update((prev) => {
+    signals.update(fn, (prev) => {
       received = prev;
       return () => prev() + 10;
     });
 
     assert.strictEqual(received, f2);
-    assert.strictEqual(fn.get()(), 12);
+    assert.strictEqual(fn()(), 12);
     assert.strictEqual(calls, 1);
   });
 
   test("test computed", () => {
     const count = signals.signal(0);
-    const double = signals.computed(() => count.get() * 2);
-    const trible = signals.computed(() => count.get() * 3);
+    const double = signals.computed(() => count() * 2);
+    const trible = signals.computed(() => count() * 3);
 
-    count.set(5);
+    count(5);
 
-    assert.strictEqual(double.get(), 10);
-    assert.strictEqual(double.peek(), 10);
-    assert.strictEqual(trible.get(), 15);
+    assert.strictEqual(double(), 10);
+    assert.strictEqual(signals.peek(double), 10);
+    assert.strictEqual(trible(), 15);
 
     assert.strictEqual(signals.isSignal(double), false);
     assert.strictEqual(signals.isComputed(double), true);
@@ -91,60 +93,60 @@ describe("Signals Unit Test", () => {
     const f1 = () => 1;
     const f2 = () => 2;
     const flag = signals.signal(true);
-    const picked = signals.computed(() => (flag.get() ? f1 : f2));
+    const picked = signals.computed(() => (flag() ? f1 : f2));
 
-    assert.strictEqual(picked.get(), f1);
+    assert.strictEqual(picked(), f1);
 
-    flag.set(false);
+    flag(false);
 
-    assert.strictEqual(picked.get(), f2);
+    assert.strictEqual(picked(), f2);
   });
 
   test("test effect", () => {
     const output: number[] = [];
     const count = signals.signal(0);
 
-    count.set(0);
+    count(0);
     const dispose1 = signals.effect(() => {
-      output.push(count.get() * 2);
+      output.push(count() * 2);
     });
 
-    count.set(2);
+    count(2);
     assert.deepStrictEqual(output, [0, 4]);
 
     assert.deepStrictEqual(signals.isEffect(dispose1), true);
     assert.deepStrictEqual(signals.isEffect(null), false);
 
     dispose1();
-    count.set(3);
+    count(3);
     assert.deepStrictEqual(output, [0, 4]);
 
     output.splice(0, output.length);
 
     const show = signals.signal(true);
 
-    count.set(0);
+    count(0);
     const dispose2 = signals.effect(() => {
-      if (show.get()) {
+      if (show()) {
         signals.effect(() => {
-          output.push(count.get());
+          output.push(count());
         });
       }
     });
 
-    count.set(2);
+    count(2);
     assert.deepStrictEqual(output, [0, 2]);
 
-    show.set(false);
+    show(false);
 
-    count.set(3);
-    count.set(4);
+    count(3);
+    count(4);
     assert.deepStrictEqual(output, [0, 2]);
 
-    count.set(0);
-    show.set(true);
+    count(0);
+    show(true);
 
-    count.set(5);
+    count(5);
     assert.deepStrictEqual(output, [0, 2, 0, 5]);
 
     dispose2();
@@ -156,10 +158,10 @@ describe("Signals Unit Test", () => {
     const fnOut: unknown[] = [];
 
     const dispose3 = signals.effect(() => {
-      fnOut.push(fnSig.get());
+      fnOut.push(fnSig());
     });
 
-    fnSig.set(fnB);
+    fnSig(fnB);
 
     dispose3();
     assert.deepStrictEqual(fnOut, [fnA, fnB]);
@@ -168,27 +170,27 @@ describe("Signals Unit Test", () => {
     const numOut: number[] = [];
 
     const dispose4 = signals.effect(() => {
-      numOut.push(num.get());
+      numOut.push(num());
     });
 
-    num.set(1);
-    num.update((v) => v);
-    num.update((v) => v + 1);
-    num.update((v) => v + 1);
+    num(1);
+    signals.update(num, (v) => v);
+    signals.update(num, (v) => v + 1);
+    signals.update(num, (v) => v + 1);
 
     dispose4();
     assert.deepStrictEqual(numOut, [1, 2, 3]);
 
     const src = signals.signal(0);
-    const twice = signals.computed(() => src.get() * 2);
+    const twice = signals.computed(() => src() * 2);
     const peekOut: number[] = [];
 
     const dispose5 = signals.effect(() => {
-      peekOut.push(src.peek() + twice.peek());
+      peekOut.push(signals.peek(src) + signals.peek(twice));
     });
 
-    src.set(1);
-    src.set(2);
+    src(1);
+    src(2);
 
     dispose5();
     assert.deepStrictEqual(peekOut, [0]);
@@ -198,14 +200,14 @@ describe("Signals Unit Test", () => {
 
     const dispose6 = signals.effect(() => {
       selfRuns++;
-      self.update((v) => v + 1);
+      signals.update(self, (v) => v + 1);
     });
 
-    self.set(100);
+    self(100);
 
     dispose6();
     assert.strictEqual(selfRuns, 1);
-    assert.strictEqual(self.get(), 100);
+    assert.strictEqual(self(), 100);
   });
 
   test("test batch", () => {
@@ -213,20 +215,20 @@ describe("Signals Unit Test", () => {
     const count = signals.signal(0);
     const countdown = signals.signal(10);
 
-    count.set(0);
+    count(0);
 
     const dispose1 = signals.effect(() => {
-      output.push(count.get());
+      output.push(count());
     });
 
     const dispose2 = signals.effect(() => {
-      output.push(countdown.get());
+      output.push(countdown());
     });
 
     signals.batch(() => {
-      count.update((c) => c + 1);
+      signals.update(count, (c) => c + 1);
       output.push(-100);
-      countdown.update((c) => c - 1);
+      signals.update(countdown, (c) => c - 1);
     });
 
     assert.deepStrictEqual(output, [0, 10, -100, 1, 9]);
@@ -320,11 +322,11 @@ describe("Reactive Unit Test", () => {
     const holder = signals.reactive({ sig });
 
     assert.strictEqual(holder.sig, sig);
-    assert.strictEqual(holder.sig.get(), fn1);
+    assert.strictEqual(holder.sig(), fn1);
 
-    holder.sig.set(fn2);
+    holder.sig(fn2);
 
-    assert.strictEqual(holder.sig.get(), fn2);
+    assert.strictEqual(holder.sig(), fn2);
     assert.strictEqual(calls, 0);
   });
 
@@ -1221,20 +1223,20 @@ describe("Reactive Unit Test", () => {
     const observed = signals.reactive({ a: 1 });
     const s = signals.signal(1);
     const double = signals.computed(() => observed.a * 2);
-    const sum = signals.computed(() => s.get() + observed.a);
+    const sum = signals.computed(() => s() + observed.a);
 
-    assert.strictEqual(double.get(), 2);
-    assert.strictEqual(sum.get(), 2);
+    assert.strictEqual(double(), 2);
+    assert.strictEqual(sum(), 2);
 
     observed.a = 5;
 
-    assert.strictEqual(double.get(), 10);
-    assert.strictEqual(sum.get(), 6);
+    assert.strictEqual(double(), 10);
+    assert.strictEqual(sum(), 6);
 
-    s.set(10);
+    s(10);
 
-    assert.strictEqual(double.get(), 10);
-    assert.strictEqual(sum.get(), 15);
+    assert.strictEqual(double(), 10);
+    assert.strictEqual(sum(), 15);
   });
 
   test("proxy nested in an assigned container stays in raw", () => {
@@ -1288,7 +1290,7 @@ describe("Reactive Unit Test", () => {
 
   test("test reactive - signal and computed should not be proxied", () => {
     const s = signals.signal(1);
-    const c = signals.computed(() => s.get() * 2);
+    const c = signals.computed(() => s() * 2);
 
     assert.strictEqual(signals.reactive(s), s);
     assert.strictEqual(signals.reactive(c), c);
@@ -1307,25 +1309,25 @@ describe("Reactive Unit Test", () => {
     const b = signals.signal(10);
 
     const dispose = signals.effect(() => {
-      output.push(observed.s.get());
+      output.push(observed.s());
     });
 
-    observed.s.set(2);
-    observed.s.update((n) => n + 1);
+    observed.s(2);
+    signals.update(observed.s, (n) => n + 1);
     observed.s = b;
-    b.set(20);
-    s.set(100);
+    b(20);
+    s(100);
 
     dispose();
 
     assert.deepStrictEqual(output, [1, 2, 3, 10, 20]);
-    assert.strictEqual(observed.c.get(), 200);
+    assert.strictEqual(observed.c(), 200);
 
     const raw = { n: 1 };
     const holder = signals.signal(raw);
 
-    assert.strictEqual(holder.get(), raw);
-    assert.strictEqual(signals.isReactive(holder.get()), false);
+    assert.strictEqual(holder(), raw);
+    assert.strictEqual(signals.isReactive(holder()), false);
   });
 });
 
@@ -2977,7 +2979,7 @@ describe("Reactive notify Unit Test", () => {
       return observed.m.size;
     });
 
-    assert.strictEqual(size.get(), 0);
+    assert.strictEqual(size(), 0);
 
     observed.m.set(1, 1);
 
@@ -2986,7 +2988,7 @@ describe("Reactive notify Unit Test", () => {
       signals.notify(observed, "m");
     });
 
-    assert.strictEqual(size.get(), 1);
+    assert.strictEqual(size(), 1);
     assert.strictEqual(runs, 2);
   });
 

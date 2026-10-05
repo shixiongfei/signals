@@ -9,8 +9,8 @@
  * https://github.com/shixiongfei/signals
  */
 
-import { BRAND_SYMBOL, capture, isObject, tracking } from "./internal.ts";
-import { batch, signal, untracked, type Signal } from "./signals.ts";
+import { BRAND_SYMBOL, capture, tracking } from "./internal.ts";
+import { batch, signal, untracked, update, type Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
 const ITERATE = Symbol("ITERATE");
@@ -44,6 +44,9 @@ const builtInSymbols = new Set(
 
 const isBuiltInSymbol = (key: PropertyKey) =>
   typeof key === "symbol" && builtInSymbols.has(key);
+
+const isObject = (value: unknown): value is object =>
+  value !== null && typeof value === "object";
 
 const isPlainObject = (value: object) => {
   const proto = Object.getPrototypeOf(value);
@@ -125,7 +128,7 @@ export function reactive<T>(target: T): T {
     const state = signalMap.get(key);
 
     if (state) {
-      state.update(increment);
+      update(state, increment);
     }
   };
 
@@ -138,7 +141,7 @@ export function reactive<T>(target: T): T {
           const i = Number(k);
 
           if (i >= obj.length && i < length && String(i) === k) {
-            removed.update(increment);
+            update(removed, increment);
             signalMap.delete(k);
           }
         }
@@ -149,7 +152,7 @@ export function reactive<T>(target: T): T {
         const removed = signalMap.get(k);
 
         if (removed) {
-          removed.update(increment);
+          update(removed, increment);
           signalMap.delete(k);
         }
       }
@@ -247,7 +250,7 @@ export function reactive<T>(target: T): T {
       const state = signalMap.get(key);
 
       if (state) {
-        state.get();
+        state();
 
         const value = Reflect.get(obj, key, receiver);
 
@@ -273,14 +276,14 @@ export function reactive<T>(target: T): T {
 
       if (kind === ACCESSOR) {
         if (tracked) {
-          getSignal(ITERATE).get();
+          getSignal(ITERATE)();
         }
 
         return reactive(value);
       }
 
       if (tracked) {
-        getSignal(key).get();
+        getSignal(key)();
       }
 
       return reactive(value);
@@ -377,14 +380,14 @@ export function reactive<T>(target: T): T {
           }
 
           if (kind === ACCESSOR) {
-            getSignal(ITERATE).get();
+            getSignal(ITERATE)();
             return result;
           }
 
           state = getSignal(key);
         }
 
-        state.get();
+        state();
       }
 
       return result;
@@ -392,7 +395,7 @@ export function reactive<T>(target: T): T {
 
     ownKeys(obj) {
       if (tracking()) {
-        getSignal(ITERATE).get();
+        getSignal(ITERATE)();
       }
       return Reflect.ownKeys(obj);
     },
@@ -400,7 +403,7 @@ export function reactive<T>(target: T): T {
     getOwnPropertyDescriptor(obj, key) {
       if (!writing && !isBuiltInSymbol(key)) {
         if (tracking()) {
-          getSignal(ITERATE).get();
+          getSignal(ITERATE)();
         }
       }
       return Reflect.getOwnPropertyDescriptor(obj, key);
@@ -431,14 +434,14 @@ export function reactive<T>(target: T): T {
               !("value" in after) ||
               (!after.configurable && !after.writable)
             ) {
-              state.update(increment);
+              update(state, increment);
               signalMap.delete(key);
             } else if (
               !before ||
               !("value" in before) ||
               !Object.is(before.value, after.value)
             ) {
-              state.update(increment);
+              update(state, increment);
             }
           }
 

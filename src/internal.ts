@@ -13,9 +13,6 @@ import * as alien from "alien-signals";
 
 export const BRAND_SYMBOL = Symbol.for("SHIXIONGFEI-SIGNALS");
 
-export const isObject = (value: unknown): value is object =>
-  value !== null && typeof value === "object";
-
 export function capture<T, A extends unknown[]>(fn: (...args: A) => T) {
   const sub = alien.getActiveSub();
 
