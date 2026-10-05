@@ -40,7 +40,9 @@ export function signal<T>(initialValue?: T): Signal<T> {
   return state as Signal<T>;
 }
 
-export function computed<T>(fn: Signal<T> | (() => T)): Computed<T> {
+export function computed<T>(
+  fn: Signal<T> | Computed<T> | (() => T),
+): Computed<T> {
   const getter = alien.computed(fn);
   Object.defineProperty(getter, BRAND_SYMBOL, { value: "computed" });
   return getter as Computed<T>;

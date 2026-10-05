@@ -11,7 +11,7 @@
 
 import assert from "node:assert";
 import { describe, test } from "node:test";
-import signals from "./index.ts";
+import signals, { type ReadonlySignal } from "./index.ts";
 
 describe("Signals Unit Test", () => {
   test("test signal", () => {
@@ -77,11 +77,16 @@ describe("Signals Unit Test", () => {
 
   test("test computed", () => {
     const count = signals.signal(0);
+    const computed1 = signals.computed(count);
+    const readonly: ReadonlySignal<number> = computed1;
+    const computed2 = signals.computed(readonly);
     const double = signals.computed(() => count() * 2);
     const trible = signals.computed(() => count() * 3);
 
     count(5);
 
+    assert.strictEqual(computed1(), 5);
+    assert.strictEqual(computed2(), 5);
     assert.strictEqual(double(), 10);
     assert.strictEqual(signals.peek(double), 10);
     assert.strictEqual(trible(), 15);
