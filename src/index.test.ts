@@ -241,6 +241,73 @@ describe("Signals Unit Test", () => {
     dispose1();
     dispose2();
   });
+
+  test("test action", () => {
+    const add = signals.action((a: number, b: number) => a + b);
+    assert.strictEqual(add(1, 2), 3);
+
+    const ctx = { base: 10 };
+    const withThis = signals.action(function (
+      this: { base: number },
+      n: number,
+    ) {
+      return this.base + n;
+    });
+    assert.strictEqual(withThis.call(ctx, 5), 15);
+
+    const output: number[] = [];
+    const a = signals.signal(0);
+    const b = signals.signal(0);
+
+    const dispose1 = signals.effect(() => {
+      output.push(a() + b());
+    });
+
+    const setBoth = signals.action((n: number) => {
+      a(n);
+      output.push(-100);
+      b(n);
+    });
+
+    setBoth(1);
+    assert.deepStrictEqual(output, [0, -100, 2]);
+
+    dispose1();
+
+    const count = signals.signal(0);
+    const readOut: number[] = [];
+    const readCount = signals.action(() => count());
+
+    const dispose2 = signals.effect(() => {
+      readOut.push(readCount());
+    });
+
+    count(1);
+    count(2);
+
+    dispose2();
+    assert.deepStrictEqual(readOut, [0]);
+
+    const errOut: number[] = [];
+    const n = signals.signal(0);
+
+    const dispose3 = signals.effect(() => {
+      errOut.push(n());
+    });
+
+    const failing = signals.action(() => {
+      n(1);
+      throw new Error("boom");
+    });
+
+    assert.throws(() => failing(), /boom/);
+    assert.deepStrictEqual(errOut, [0, 1]);
+
+    n(2);
+    assert.deepStrictEqual(errOut, [0, 1, 2]);
+
+    dispose3();
+  });
 });
 
 describe("Reactive Unit Test", () => {
