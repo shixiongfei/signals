@@ -215,6 +215,30 @@ describe("Signals Unit Test", () => {
     assert.strictEqual(self(), 100);
   });
 
+  test("test effect scope", () => {
+    const output: number[] = [];
+    const count = signals.signal(1);
+
+    const dispose = signals.effectScope(() => {
+      signals.effect(() => {
+        output.push(count() * 2);
+      });
+
+      signals.effect(() => {
+        output.push(count() * 3);
+      });
+    });
+
+    count(2);
+    assert.deepStrictEqual(output, [2, 3, 4, 6]);
+    assert.strictEqual(signals.isEffectScope(dispose), true);
+
+    dispose();
+    count(3);
+
+    assert.deepStrictEqual(output, [2, 3, 4, 6]);
+  });
+
   test("test batch", () => {
     const output: number[] = [];
     const count = signals.signal(0);
