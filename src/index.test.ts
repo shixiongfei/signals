@@ -245,6 +245,7 @@ describe("Signals Unit Test", () => {
   test("test action", () => {
     const add = signals.action((a: number, b: number) => a + b);
     assert.strictEqual(add(1, 2), 3);
+    assert.strictEqual(signals.isAction(add), true);
 
     const ctx = { base: 10 };
     const withThis = signals.action(function (
@@ -254,6 +255,7 @@ describe("Signals Unit Test", () => {
       return this.base + n;
     });
     assert.strictEqual(withThis.call(ctx, 5), 15);
+    assert.strictEqual(signals.isAction(withThis), true);
 
     const output: number[] = [];
     const a = signals.signal(0);
@@ -271,6 +273,8 @@ describe("Signals Unit Test", () => {
 
     setBoth(1);
     assert.deepStrictEqual(output, [0, -100, 2]);
+    assert.strictEqual(signals.isAction(setBoth), true);
+    assert.strictEqual(signals.isAction(dispose1), false);
 
     dispose1();
 

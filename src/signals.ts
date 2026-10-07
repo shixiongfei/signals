@@ -32,6 +32,10 @@ export type Effect = { (): void } & {
   readonly [BRAND_SYMBOL]: "effect";
 };
 
+export type Action<A extends unknown[], R> = { (...args: A): R } & {
+  readonly [BRAND_SYMBOL]: "action";
+};
+
 export function signal<T>(): Signal<T>;
 export function signal<T>(initialValue: T): Signal<T>;
 export function signal<T>(initialValue?: T): Signal<T> {
@@ -83,10 +87,14 @@ export const update = <T>(
   state(setter(untracked(state)));
 };
 
-export const action = <A extends unknown[], R>(fn: (...args: A) => R) => {
-  return function wrapper(this: unknown, ...args: A) {
+export const action = <A extends unknown[], R>(
+  fn: (...args: A) => R,
+): Action<A, R> => {
+  const wrapper = function (this: unknown, ...args: A) {
     return batch(() => untracked(() => fn.apply(this, args)));
   };
+  Object.defineProperty(wrapper, BRAND_SYMBOL, { value: "action" });
+  return wrapper as Action<A, R>;
 };
 
 export function isSignal<T>(value: unknown): value is Signal<T> {
@@ -115,5 +123,11 @@ export function isReadableSignal<T>(
 export function isEffect(value: unknown): value is Effect {
   return (
     typeof value === "function" && (value as any)[BRAND_SYMBOL] === "effect"
+  );
+}
+
+export function isAction(value: unknown): value is Action<any, any> {
+  return (
+    typeof value === "function" && (value as any)[BRAND_SYMBOL] === "action"
   );
 }
