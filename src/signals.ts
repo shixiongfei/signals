@@ -86,26 +86,23 @@ export function untracked<T>(fn: Signal<T> | Computed<T> | (() => T)): T {
   }
 }
 
-export const peek = <T>(getter: Signal<T> | Computed<T>) => {
+export function peek<T>(getter: Signal<T> | Computed<T>) {
   return untracked(getter);
-};
+}
 
-export const update = <T>(
-  state: Signal<T>,
-  setter: (previousValue: T) => T,
-) => {
+export function update<T>(state: Signal<T>, setter: (previousValue: T) => T) {
   state(setter(untracked(state)));
-};
+}
 
-export const action = <A extends unknown[], R>(
+export function action<A extends unknown[], R>(
   fn: (...args: A) => R,
-): Action<A, R> => {
-  const wrapper = function (this: unknown, ...args: A) {
+): Action<A, R> {
+  function wrapper(this: unknown, ...args: A) {
     return batch(() => untracked(() => fn.apply(this, args)));
-  };
+  }
   Object.defineProperty(wrapper, BRAND_SYMBOL, { value: "action" });
   return wrapper as Action<A, R>;
-};
+}
 
 export function isSignal<T>(value: unknown): value is Signal<T> {
   return (
