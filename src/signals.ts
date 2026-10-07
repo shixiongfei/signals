@@ -32,6 +32,10 @@ export type Effect = { (): void } & {
   readonly [BRAND_SYMBOL]: "effect";
 };
 
+export type EffectScope = { (): void } & {
+  readonly [BRAND_SYMBOL]: "effect-scope";
+};
+
 export type Action<A extends unknown[], R> = { (...args: A): R } & {
   readonly [BRAND_SYMBOL]: "action";
 };
@@ -56,6 +60,12 @@ export function effect(fn: () => void): Effect {
   const dispose = alien.effect(fn);
   Object.defineProperty(dispose, BRAND_SYMBOL, { value: "effect" });
   return dispose as Effect;
+}
+
+export function effectScope(fn: () => void): EffectScope {
+  const dispose = alien.effectScope(fn);
+  Object.defineProperty(dispose, BRAND_SYMBOL, { value: "effect-scope" });
+  return dispose as EffectScope;
 }
 
 export function batch<T>(fn: () => T): T {
@@ -123,6 +133,13 @@ export function isReadableSignal<T>(
 export function isEffect(value: unknown): value is Effect {
   return (
     typeof value === "function" && (value as any)[BRAND_SYMBOL] === "effect"
+  );
+}
+
+export function isEffectScope(value: unknown): value is EffectScope {
+  return (
+    typeof value === "function" &&
+    (value as any)[BRAND_SYMBOL] === "effect-scope"
   );
 }
 
