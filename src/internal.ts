@@ -13,13 +13,13 @@ import * as alien from "alien-signals";
 
 export const BRAND_SYMBOL = Symbol.for("SHIXIONGFEI-SIGNALS");
 
-export function capture<T, A extends unknown[]>(fn: (...args: A) => T) {
+export function capture<A extends unknown[], R>(fn: (...args: A) => R) {
   const sub = alien.getActiveSub();
 
-  return (...args: A) => {
+  return function wrapper(this: unknown, ...args: A) {
     const prev = alien.setActiveSub(sub);
     try {
-      return fn(...args);
+      return fn.apply(this, args);
     } finally {
       alien.setActiveSub(prev);
     }

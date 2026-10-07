@@ -83,6 +83,12 @@ export const update = <T>(
   state(setter(untracked(state)));
 };
 
+export const action = <A extends unknown[], R>(fn: (...args: A) => R) => {
+  return function wrapper(this: unknown, ...args: A) {
+    return batch(() => untracked(() => fn.apply(this, args)));
+  };
+};
+
 export function isSignal<T>(value: unknown): value is Signal<T> {
   return (
     typeof value === "function" && (value as any)[BRAND_SYMBOL] === "signal"
