@@ -283,6 +283,8 @@ describe("Signals Unit Test", () => {
 
   test("test action", () => {
     const add = signals.action((a: number, b: number) => a + b);
+    const sum = signals.action(add);
+    assert.strictEqual(add, sum);
     assert.strictEqual(add(1, 2), 3);
     assert.strictEqual(signals.isAction(add), true);
 
@@ -350,6 +352,58 @@ describe("Signals Unit Test", () => {
     assert.deepStrictEqual(errOut, [0, 1, 2]);
 
     dispose3();
+  });
+
+  test("test actions", () => {
+    const ref1 = signals.actions(
+      signals.reactive({
+        sum(a: number, b: number) {
+          return a + b;
+        },
+
+        second: {
+          sub(a: number, b: number) {
+            return a - b;
+          },
+        },
+      }),
+    );
+
+    assert.strictEqual(signals.isAction(ref1.sum), false);
+    assert.strictEqual(signals.isAction(ref1.second.sub), false);
+
+    const ref2 = signals.actions(ref1.second);
+    assert.strictEqual(signals.isAction(ref2.sub), false);
+
+    const count = signals.signal(0);
+    const double = signals.computed(() => count() * 2);
+
+    const store = signals.actions({
+      count,
+      double,
+
+      sum(a: number, b: number) {
+        return a + b;
+      },
+
+      second: {
+        sub(a: number, b: number) {
+          return a - b;
+        },
+      },
+    });
+
+    assert.strictEqual(signals.isAction(store.count), false);
+    assert.strictEqual(signals.isAction(store.double), false);
+    assert.strictEqual(signals.isAction(store.sum), true);
+    assert.strictEqual(signals.isAction(store.second.sub), true);
+
+    const model = signals.actions(store);
+
+    assert.strictEqual(store.count, model.count);
+    assert.strictEqual(store.double, model.double);
+    assert.strictEqual(store.sum, model.sum);
+    assert.strictEqual(store.second.sub, model.second.sub);
   });
 });
 
