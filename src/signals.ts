@@ -97,6 +97,10 @@ export function update<T>(state: Signal<T>, setter: (previousValue: T) => T) {
 export function action<A extends unknown[], R>(
   fn: (...args: A) => R,
 ): Action<A, R> {
+  if ((fn as any)[BRAND_SYMBOL] !== undefined) {
+    return fn as Action<A, R>;
+  }
+
   function wrapper(this: unknown, ...args: A) {
     return batch(() => untracked(() => fn.apply(this, args)));
   }
@@ -112,9 +116,10 @@ export function actions<T extends object>(value: T) {
   for (const key in value) {
     const val = value[key];
 
-    if (typeof val === "function" && (val as any)[BRAND_SYMBOL] === undefined) {
-      value[key] = action(val as (...args: unknown[]) => unknown) as any;
-    } else if (isObject(val) && (val as any)[BRAND_SYMBOL] === undefined) {
+    if (typeof val === "function") {
+      const wrapper = action(val as (...args: unknown[]) => unknown);
+      value[key] = wrapper as T[Extract<keyof T, string>];
+    } else if (isObject(val)) {
       actions(val);
     }
   }
