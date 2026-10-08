@@ -56,7 +56,7 @@ export function computed<T>(
   return getter as Computed<T>;
 }
 
-export function effect(fn: () => void): Effect {
+export function effect(fn: () => void | (() => void)): Effect {
   const dispose = alien.effect(fn);
   Object.defineProperty(dispose, BRAND_SYMBOL, { value: "effect" });
   return dispose as Effect;

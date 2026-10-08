@@ -213,6 +213,21 @@ describe("Signals Unit Test", () => {
     dispose6();
     assert.strictEqual(selfRuns, 1);
     assert.strictEqual(self(), 100);
+
+    count(1);
+    const dispose7 = signals.effect(() => {
+      output.push(count());
+
+      return () => {
+        output.push(count() * 2);
+      };
+    });
+
+    count(2);
+    dispose7();
+    count(3);
+
+    assert.deepStrictEqual(output, [1, 4, 2, 4]);
   });
 
   test("test effect scope", () => {
