@@ -9,7 +9,7 @@
  * https://github.com/shixiongfei/signals
  */
 
-import { BRAND_SYMBOL, capture, tracking } from "./internal.ts";
+import { BRAND_SYMBOL, capture, isObject, tracking } from "./internal.ts";
 import { batch, signal, untracked, update, type Signal } from "./signals.ts";
 
 const RAW = Symbol("RAW");
@@ -44,9 +44,6 @@ const builtInSymbols = new Set(
 
 const isBuiltInSymbol = (key: PropertyKey) =>
   typeof key === "symbol" && builtInSymbols.has(key);
-
-const isObject = (value: unknown): value is object =>
-  value !== null && typeof value === "object";
 
 const isPlainObject = (value: object) => {
   const proto = Object.getPrototypeOf(value);

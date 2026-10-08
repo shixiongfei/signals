@@ -10,7 +10,7 @@
  */
 
 import * as alien from "alien-signals";
-import { BRAND_SYMBOL } from "./internal.ts";
+import { BRAND_SYMBOL, isObject } from "./internal.ts";
 
 type SignalGetter<T> = { (): T };
 type SignalSetter<T> = { (value: T): void };
@@ -102,6 +102,18 @@ export function action<A extends unknown[], R>(
   }
   Object.defineProperty(wrapper, BRAND_SYMBOL, { value: "action" });
   return wrapper as Action<A, R>;
+}
+
+export function actions(value: Record<string, unknown>) {
+  for (const key in value) {
+    const val = value[key];
+
+    if (typeof val === "function" && (val as any)[BRAND_SYMBOL] === undefined) {
+      value[key] = action(val as (...args: unknown[]) => unknown);
+    } else if (isObject(val) && (val as any)[BRAND_SYMBOL] === undefined) {
+      actions(val as Record<string, unknown>);
+    }
+  }
 }
 
 export function isSignal<T>(value: unknown): value is Signal<T> {
