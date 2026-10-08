@@ -104,16 +104,22 @@ export function action<A extends unknown[], R>(
   return wrapper as Action<A, R>;
 }
 
-export function actions(value: Record<string, unknown>) {
+export function actions<T extends object>(value: T) {
+  if ((value as any)[BRAND_SYMBOL] !== undefined) {
+    return value;
+  }
+
   for (const key in value) {
     const val = value[key];
 
     if (typeof val === "function" && (val as any)[BRAND_SYMBOL] === undefined) {
-      value[key] = action(val as (...args: unknown[]) => unknown);
+      value[key] = action(val as (...args: unknown[]) => unknown) as any;
     } else if (isObject(val) && (val as any)[BRAND_SYMBOL] === undefined) {
-      actions(val as Record<string, unknown>);
+      actions(val);
     }
   }
+
+  return value;
 }
 
 export function isSignal<T>(value: unknown): value is Signal<T> {
