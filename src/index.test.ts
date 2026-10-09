@@ -3540,17 +3540,37 @@ describe("Store Unit Test", () => {
   });
 
   test("test store idempotent wrapping", () => {
-    const s = signals.store(() => ({
-      run() {
-        return 1;
-      },
-    }));
+    let run = 0;
+
+    const s = signals.store(() => {
+      signals.effect(() => {
+        return () => {
+          run++;
+        };
+      });
+
+      return {
+        run() {
+          return 1;
+        },
+      };
+    });
 
     const first = s.run;
 
-    const again = signals.store(() => s);
+    const again = signals.store(() => {
+      signals.effect(() => {
+        return () => {
+          run++;
+        };
+      });
+
+      return s;
+    });
+
     assert.strictEqual(again.run, first);
 
     s[Symbol.dispose]();
+    assert.strictEqual(run, 2);
   });
 });
