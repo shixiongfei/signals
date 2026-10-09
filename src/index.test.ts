@@ -3222,6 +3222,7 @@ describe("Store Unit Test", () => {
 
     assert.strictEqual(s.existing, existing);
     assert.strictEqual(signals.isEffectScope(effectDispose), true);
+    assert.strictEqual(signals.isAction(effectDispose), false);
     assert.strictEqual(s.run(), 1);
 
     s[Symbol.dispose]();
