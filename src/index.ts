@@ -10,9 +10,11 @@
  */
 
 export * from "./signals.ts";
+export * from "./stores.ts";
 export * from "./reactivity.ts";
 
 import * as signals from "./signals.ts";
+import * as stores from "./stores.ts";
 import * as reactivity from "./reactivity.ts";
 
-export default { ...signals, ...reactivity };
+export default { ...signals, ...stores, ...reactivity };

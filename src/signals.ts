@@ -10,7 +10,7 @@
  */
 
 import * as alien from "alien-signals";
-import { BRAND_SYMBOL, isObject } from "./internal.ts";
+import { BRAND_SYMBOL } from "./internal.ts";
 
 type SignalGetter<T> = { (): T };
 type SignalSetter<T> = { (value: T): void };
@@ -39,26 +39,6 @@ export type EffectScope = { (): void } & {
 export type Action<A extends unknown[], R> = { (...args: A): R } & {
   readonly [BRAND_SYMBOL]: "action";
 };
-
-type ValidStore<T> = {
-  [K in keyof T]: T[K] extends ReadonlySignal<unknown>
-    ? T[K]
-    : T[K] extends Effect | EffectScope
-      ? never
-      : T[K] extends (...args: any[]) => unknown
-        ? T[K]
-        : T[K] extends object
-          ? ValidStore<T[K]>
-          : never;
-};
-
-export type Store<T> = {
-  [K in keyof T]: T[K] extends ReadonlySignal<unknown>
-    ? T[K]
-    : T[K] extends (...args: infer A) => infer R
-      ? Action<A, R>
-      : Store<T[K]>;
-} & { readonly [BRAND_SYMBOL]: "store" };
 
 export function signal<T>(): Signal<T>;
 export function signal<T>(initialValue: T): Signal<T>;
@@ -126,87 +106,6 @@ export function action<A extends unknown[], R>(
   }
   Object.defineProperty(wrapper, BRAND_SYMBOL, { value: "action" });
   return wrapper as Action<A, R>;
-}
-
-function actions(target: Record<string, unknown>) {
-  Object.defineProperty(target, BRAND_SYMBOL, { value: "store" });
-
-  for (const key of Object.keys(target)) {
-    const value = target[key];
-    const brand = (value as any)?.[BRAND_SYMBOL];
-
-    if (brand === "signal" || brand === "computed" || brand === "action") {
-      continue;
-    }
-
-    if (typeof value === "function") {
-      if (brand !== undefined) {
-        throw new TypeError(
-          `store.${key} is a ${brand} and cannot be placed in a store`,
-        );
-      }
-      target[key] = action(value as (...args: unknown[]) => unknown);
-    } else if (isObject(value)) {
-      if (brand !== undefined) {
-        throw new TypeError(
-          `store.${key} is a ${brand} and cannot be placed in a store`,
-        );
-      }
-      actions(value as Record<string, unknown>);
-    } else {
-      throw new TypeError(
-        `store.${key} must be a signal, a function, or a nested object`,
-      );
-    }
-  }
-}
-
-export function store<T extends object>(
-  setup: () => T & ValidStore<T>,
-): Store<T> & Disposable {
-  let retval: T | undefined;
-  let error: unknown;
-
-  const dispose = effectScope(() => {
-    try {
-      const value = setup() as Record<string, unknown>;
-
-      if (!isObject(value)) {
-        throw new TypeError(
-          `store() setup must return an object, got ${value === null ? "null" : typeof value}`,
-        );
-      }
-
-      const brand = (value as any)[BRAND_SYMBOL];
-
-      if (brand !== undefined) {
-        throw new TypeError(
-          `store() setup must return a plain object, got one branded as "${brand}"`,
-        );
-      }
-
-      actions(value);
-
-      retval = value as T;
-    } catch (err) {
-      error = err;
-    }
-  });
-
-  if (!retval) {
-    dispose();
-
-    if (!error) {
-      error = new Error("store() setup threw a falsy value");
-    }
-    throw error;
-  }
-
-  Object.defineProperty(retval, Symbol.dispose, {
-    value: () => dispose(),
-  });
-
-  return retval as Store<T> & Disposable;
 }
 
 export function isSignal<T>(value: unknown): value is Signal<T> {
