@@ -3516,11 +3516,15 @@ describe("Store Unit Test", () => {
   test("test store nested store", () => {
     const innerOutput: number[] = [];
     const count = signals.signal(0);
+    let run = 0;
 
     const outer = signals.store(() => {
       const inner = signals.store(() => {
         signals.effect(() => {
           innerOutput.push(count());
+          return () => {
+            run++;
+          };
         });
 
         return { run() {} };
@@ -3537,40 +3541,17 @@ describe("Store Unit Test", () => {
     outer[Symbol.dispose]();
     count(2);
     assert.deepStrictEqual(innerOutput, [0, 1]);
+    assert.strictEqual(run, 2);
   });
 
   test("test store idempotent wrapping", () => {
-    let run = 0;
+    const s = signals.store(() => ({
+      run() {
+        return 1;
+      },
+    }));
 
-    const s = signals.store(() => {
-      signals.effect(() => {
-        return () => {
-          run++;
-        };
-      });
-
-      return {
-        run() {
-          return 1;
-        },
-      };
-    });
-
-    const first = s.run;
-
-    const again = signals.store(() => {
-      signals.effect(() => {
-        return () => {
-          run++;
-        };
-      });
-
-      return s;
-    });
-
-    assert.strictEqual(again.run, first);
-
+    assert.throws(() => signals.store(() => s), TypeError);
     s[Symbol.dispose]();
-    assert.strictEqual(run, 2);
   });
 });
