@@ -353,58 +353,6 @@ describe("Signals Unit Test", () => {
 
     dispose3();
   });
-
-  test("test actions", () => {
-    const ref1 = signals.actions(
-      signals.reactive({
-        sum(a: number, b: number) {
-          return a + b;
-        },
-
-        second: {
-          sub(a: number, b: number) {
-            return a - b;
-          },
-        },
-      }),
-    );
-
-    assert.strictEqual(signals.isAction(ref1.sum), false);
-    assert.strictEqual(signals.isAction(ref1.second.sub), false);
-
-    const ref2 = signals.actions(ref1.second);
-    assert.strictEqual(signals.isAction(ref2.sub), false);
-
-    const count = signals.signal(0);
-    const double = signals.computed(() => count() * 2);
-
-    const store = signals.actions({
-      count,
-      double,
-
-      sum(a: number, b: number) {
-        return a + b;
-      },
-
-      second: {
-        sub(a: number, b: number) {
-          return a - b;
-        },
-      },
-    });
-
-    assert.strictEqual(signals.isAction(store.count), false);
-    assert.strictEqual(signals.isAction(store.double), false);
-    assert.strictEqual(signals.isAction(store.sum), true);
-    assert.strictEqual(signals.isAction(store.second.sub), true);
-
-    const model = signals.actions(store);
-
-    assert.strictEqual(store.count, model.count);
-    assert.strictEqual(store.double, model.double);
-    assert.strictEqual(store.sum, model.sum);
-    assert.strictEqual(store.second.sub, model.second.sub);
-  });
 });
 
 describe("Reactive Unit Test", () => {
@@ -3177,5 +3125,432 @@ describe("Reactive notify Unit Test", () => {
     dispose();
 
     assert.deepStrictEqual(output, [0, 1, 2]);
+  });
+});
+
+describe("Store Unit Test", () => {
+  test("test store basic", () => {
+    const counter = signals.store(() => {
+      const count = signals.signal(0);
+      const double = signals.computed(() => count() * 2);
+
+      return {
+        count,
+        double,
+
+        inc() {
+          count(count() + 1);
+        },
+      };
+    });
+
+    assert.strictEqual(signals.isSignal(counter.count), true);
+    assert.strictEqual(signals.isComputed(counter.double), true);
+    assert.strictEqual(signals.isAction(counter.count), false);
+    assert.strictEqual(signals.isAction(counter.inc), true);
+
+    counter.inc();
+    assert.strictEqual(counter.count(), 1);
+    assert.strictEqual(counter.double(), 2);
+
+    const obj = { fn() {} };
+    assert.strictEqual(
+      signals.store(() => obj),
+      obj,
+    );
+  });
+
+  test("test store action semantics", () => {
+    const output: number[] = [];
+
+    const s = signals.store(() => {
+      const a = signals.signal(0);
+      const b = signals.signal(0);
+
+      signals.effect(() => {
+        output.push(a() + b());
+      });
+
+      return {
+        a,
+        b,
+
+        setBoth(n: number) {
+          a(n);
+          output.push(-100);
+          b(n);
+        },
+
+        read() {
+          return a();
+        },
+      };
+    });
+
+    s.setBoth(1);
+    assert.deepStrictEqual(output, [0, -100, 2]);
+
+    const readOut: number[] = [];
+    const dispose = signals.effect(() => {
+      readOut.push(s.read());
+    });
+
+    s.a(5);
+    assert.deepStrictEqual(readOut, [1]);
+
+    dispose();
+    s[Symbol.dispose]();
+  });
+
+  test("test store existing action and branded functions", () => {
+    const existing = signals.action(() => 1);
+    let effectDispose: unknown;
+
+    const s = signals.store(() => {
+      const count = signals.signal(0);
+
+      return {
+        count,
+        existing,
+
+        scope: signals.effectScope(() => {}),
+        run: () => 1,
+      };
+    });
+
+    effectDispose = s.scope;
+
+    assert.strictEqual(s.existing, existing);
+    assert.strictEqual(signals.isEffectScope(effectDispose), true);
+    assert.strictEqual(s.run(), 1);
+
+    s[Symbol.dispose]();
+  });
+
+  test("test store nested objects", () => {
+    const s = signals.store(() => {
+      const count = signals.signal(0);
+
+      return {
+        count,
+        nested: {
+          inc() {
+            count(count() + 1);
+          },
+          deep: {
+            reset() {
+              count(0);
+            },
+          },
+        },
+      };
+    });
+
+    assert.strictEqual(signals.isAction(s.nested.inc), true);
+    assert.strictEqual(signals.isAction(s.nested.deep.reset), true);
+
+    s.nested.inc();
+    assert.strictEqual(s.count(), 1);
+
+    s.nested.deep.reset();
+    assert.strictEqual(s.count(), 0);
+  });
+
+  test("test store circular and shared references", () => {
+    const shared = { fn() {} };
+    const root: any = {
+      a: shared,
+      b: shared,
+      run() {},
+    };
+    root.self = root;
+
+    const s = signals.store(() => root);
+
+    assert.strictEqual(s.self, s);
+    assert.strictEqual(s.a, s.b);
+    assert.strictEqual(signals.isAction(s.a.fn), true);
+    assert.strictEqual(signals.isAction(s.run), true);
+  });
+
+  test("test store skips non plain values", () => {
+    class Foo {
+      method() {}
+    }
+
+    const date = new Date(0);
+    const map = new Map();
+    const arr = [() => 1];
+    const foo = new Foo();
+
+    const s = signals.store(() => ({
+      date,
+      map,
+      arr,
+      foo,
+      num: 1,
+      str: "x",
+      flag: true,
+      nil: null,
+      undef: undefined,
+    }));
+
+    assert.strictEqual(s.date, date);
+    assert.strictEqual(s.map, map);
+    assert.strictEqual(s.arr, arr);
+    assert.strictEqual(s.foo, foo);
+    assert.strictEqual(signals.isAction(s.arr[0]), false);
+    assert.strictEqual(signals.isAction(foo.method), false);
+
+    assert.strictEqual(s.num, 1);
+    assert.strictEqual(s.str, "x");
+    assert.strictEqual(s.flag, true);
+    assert.strictEqual(s.nil, null);
+    assert.strictEqual(s.undef, undefined);
+  });
+
+  test("test store property descriptors", () => {
+    let getterCalls = 0;
+    const fn = () => 1;
+
+    const source: any = {
+      get lazy() {
+        getterCalls++;
+        return fn;
+      },
+      normal() {},
+    };
+
+    Object.defineProperty(source, "readonly", {
+      value: fn,
+      writable: false,
+      enumerable: true,
+      configurable: false,
+    });
+
+    const s = signals.store(() => source);
+
+    assert.strictEqual(getterCalls, 0);
+    assert.strictEqual(s.lazy, fn);
+    assert.strictEqual(s.readonly, fn);
+    assert.strictEqual(signals.isAction(s.readonly), false);
+    assert.strictEqual(signals.isAction(s.normal), true);
+  });
+
+  test("test store frozen", () => {
+    const frozenInner = Object.freeze({ fn() {} });
+
+    const s = signals.store(() => ({
+      inner: frozenInner,
+      run() {},
+    }));
+
+    assert.strictEqual(s.inner, frozenInner);
+    assert.strictEqual(signals.isAction(s.inner.fn), false);
+    assert.strictEqual(signals.isAction(s.run), true);
+
+    const count = signals.signal(0);
+    let runs = 0;
+
+    assert.throws(
+      () =>
+        signals.store(() => {
+          signals.effect(() => {
+            runs++;
+            count();
+          });
+
+          return Object.freeze({ fn() {} });
+        }),
+      TypeError,
+    );
+
+    assert.strictEqual(runs, 1);
+    count(1);
+    assert.strictEqual(runs, 1);
+  });
+
+  test("test store dispose", () => {
+    const output: number[] = [];
+    const count = signals.signal(1);
+
+    const s = signals.store(() => {
+      signals.effect(() => {
+        output.push(count() * 2);
+      });
+
+      signals.effect(() => {
+        output.push(count() * 3);
+      });
+
+      return { count };
+    });
+
+    count(2);
+    assert.deepStrictEqual(output, [2, 3, 4, 6]);
+
+    assert.deepStrictEqual(Object.keys(s), ["count"]);
+    assert.strictEqual(typeof s[Symbol.dispose], "function");
+
+    s[Symbol.dispose]();
+    count(3);
+    assert.deepStrictEqual(output, [2, 3, 4, 6]);
+
+    assert.doesNotThrow(() => s[Symbol.dispose]());
+
+    const nested = signals.store(() => ({ inner: { fn() {} } }));
+    assert.strictEqual(Symbol.dispose in nested.inner, false);
+    nested[Symbol.dispose]();
+  });
+
+  test("test store using", () => {
+    const output: number[] = [];
+    const count = signals.signal(0);
+
+    {
+      using s = signals.store(() => {
+        signals.effect(() => {
+          output.push(count());
+        });
+
+        return { count };
+      });
+
+      count(1);
+      assert.strictEqual(s.count(), 1);
+    }
+
+    count(2);
+    assert.deepStrictEqual(output, [0, 1]);
+  });
+
+  test("test store setup errors", () => {
+    const count = signals.signal(0);
+    let runs = 0;
+
+    assert.throws(
+      () =>
+        signals.store(() => {
+          signals.effect(() => {
+            runs++;
+            count();
+          });
+
+          throw new Error("boom");
+        }),
+      /boom/,
+    );
+
+    assert.strictEqual(runs, 1);
+    count(1);
+    assert.strictEqual(runs, 1);
+
+    assert.throws(
+      () =>
+        signals.store(() => {
+          throw undefined;
+        }),
+      /threw undefined/,
+    );
+
+    let thrown: unknown = "unset";
+    try {
+      signals.store(() => {
+        throw 0;
+      });
+    } catch (err) {
+      thrown = err;
+    }
+    assert.strictEqual(thrown, 0);
+  });
+
+  test("test store with reactive", () => {
+    const output: number[] = [];
+
+    const s = signals.store(() => {
+      const state = signals.reactive({
+        count: 0,
+        nested: {
+          inc() {},
+        },
+      });
+
+      signals.effect(() => {
+        output.push(state.count);
+      });
+
+      return {
+        state,
+        inc() {
+          state.count++;
+        },
+      };
+    });
+
+    s.inc();
+    s.inc();
+    assert.deepStrictEqual(output, [0, 1, 2]);
+
+    assert.strictEqual(signals.isAction(s.state.nested.inc), true);
+
+    const r = signals.store(() => signals.reactive({ count: 0, fn() {} }));
+    const rOut: number[] = [];
+    const dispose = signals.effect(() => {
+      rOut.push(r.count);
+    });
+
+    assert.strictEqual(signals.isAction(r.fn), true);
+    assert.strictEqual(typeof r[Symbol.dispose], "function");
+    assert.deepStrictEqual(rOut, [0]);
+
+    r.count = 1;
+    assert.deepStrictEqual(rOut, [0, 1]);
+
+    assert.strictEqual(signals.isReactive(r), true);
+
+    dispose();
+    r[Symbol.dispose]();
+    s[Symbol.dispose]();
+  });
+
+  test("test store nested store", () => {
+    const innerOutput: number[] = [];
+    const count = signals.signal(0);
+
+    const outer = signals.store(() => {
+      const inner = signals.store(() => {
+        signals.effect(() => {
+          innerOutput.push(count());
+        });
+
+        return { run() {} };
+      });
+
+      return { inner };
+    });
+
+    assert.strictEqual(signals.isAction(outer.inner.run), true);
+
+    count(1);
+    assert.deepStrictEqual(innerOutput, [0, 1]);
+
+    outer[Symbol.dispose]();
+    count(2);
+    assert.deepStrictEqual(innerOutput, [0, 1]);
+  });
+
+  test("test store idempotent wrapping", () => {
+    const s = signals.store(() => ({
+      run() {
+        return 1;
+      },
+    }));
+
+    const first = s.run;
+
+    const again = signals.store(() => s);
+    assert.strictEqual(again.run, first);
+
+    s[Symbol.dispose]();
   });
 });
