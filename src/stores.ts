@@ -32,6 +32,8 @@ export type Store<T> = {
           : T[K];
 };
 
+const disposeMap = new WeakMap<object, Array<() => void>>();
+
 function actions<T extends object>(target: T, seen = new WeakSet<object>()) {
   if (Object.isFrozen(target)) {
     return target;
@@ -73,9 +75,25 @@ export function store<T extends object>(setup: () => T): Store<T> & Disposable {
     try {
       retval = actions(setup());
 
-      Object.defineProperty(toRaw(retval as T), Symbol.dispose, {
-        value: () => dispose(),
-      });
+      const raw = toRaw(retval as T);
+      const disposers = disposeMap.get(raw);
+
+      if (disposers) {
+        disposers.push(() => dispose());
+      } else {
+        const created = [() => dispose()];
+
+        Object.defineProperty(raw, Symbol.dispose, {
+          value: () => {
+            created
+              .splice(0)
+              .reverse()
+              .forEach((dispose) => dispose());
+          },
+        });
+
+        disposeMap.set(raw, created);
+      }
     } catch (err) {
       failed = true;
       error = err;
