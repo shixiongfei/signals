@@ -5,6 +5,14 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
   "scripts": {
     "build": "tsc",
     "test": "tsc && node ./dist/index.test.js",
@@ -16,7 +24,9 @@
   },
   "files": [
     "dist",
-    "src"
+    "src",
+    "!dist/*.test.*",
+    "!src/*.test.*"
   ],
   "keywords": [
     "signal",
