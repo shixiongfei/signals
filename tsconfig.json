@@ -5,6 +5,7 @@
     "types": ["node"],
     "module": "nodenext",
     "moduleResolution": "NodeNext",
+    "strict": true,
     "declaration": true,
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
