@@ -3389,6 +3389,27 @@ describe("Store Unit Test", () => {
     assert.strictEqual(s.undef, undefined);
   });
 
+  test("test store class instance typing", () => {
+    class Counter {
+      #n = 0;
+
+      inc() {
+        return ++this.#n;
+      }
+    }
+
+    const s = signals.store(() => new Counter());
+    const counter: Counter & Disposable = s;
+    const nested = signals.store(() => ({ counter: new Counter() }));
+    const inner: Counter = nested.counter;
+
+    assert.strictEqual(counter.inc(), 1);
+    assert.strictEqual(inner.inc(), 1);
+
+    nested[Symbol.dispose]();
+    s[Symbol.dispose]();
+  });
+
   test("test store property descriptors", () => {
     let getterCalls = 0;
     const fn = () => 1;

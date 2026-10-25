@@ -27,10 +27,12 @@ export type Store<T> = {
             | WeakSet<any>
             | readonly any[]
         ? T[K]
-        : T[K] extends object
+        : T[K] extends Record<string, unknown>
           ? Store<T[K]>
           : T[K];
 };
+
+type Stored<T> = T extends Record<string, unknown> ? Store<T> : T;
 
 const disposeMap = new WeakMap<object, Array<() => void>>();
 
@@ -66,7 +68,9 @@ function actions<T extends object>(target: T, seen = new WeakSet<object>()) {
   return target;
 }
 
-export function store<T extends object>(setup: () => T): Store<T> & Disposable {
+export function store<T extends object>(
+  setup: () => T,
+): Stored<T> & Disposable {
   let retval: T | undefined;
   let error: unknown;
   let failed = false;
@@ -123,5 +127,5 @@ export function store<T extends object>(setup: () => T): Store<T> & Disposable {
     throw error;
   }
 
-  return retval as Store<T> & Disposable;
+  return retval as Stored<T> & Disposable;
 }
