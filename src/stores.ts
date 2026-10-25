@@ -12,10 +12,10 @@
 import { isObject, isPlainObject } from "./internal.ts";
 import { action, effectScope } from "./signals.ts";
 import { toRaw } from "./reactivity.ts";
-import type { Action, ReadonlySignal } from "./signals.ts";
+import type { Action, Effect, EffectScope, ReadonlySignal } from "./signals.ts";
 
 export type Store<T> = {
-  [K in keyof T]: T[K] extends ReadonlySignal<any>
+  [K in keyof T]: T[K] extends ReadonlySignal<any> | Effect | EffectScope
     ? T[K]
     : T[K] extends (...args: infer A) => infer R
       ? Action<A, R>
@@ -81,7 +81,21 @@ export function store<T extends object>(setup: () => T): Store<T> & Disposable {
       if (disposers) {
         disposers.push(() => dispose());
       } else {
-        const created = [() => dispose()];
+        const existing = Object.getOwnPropertyDescriptor(raw, Symbol.dispose);
+
+        if (existing && !existing.configurable) {
+          throw new TypeError(
+            "store() cannot wrap an object with a non-configurable Symbol.dispose",
+          );
+        }
+
+        const created: Array<() => void> = [];
+
+        if (existing && typeof existing.value === "function") {
+          created.push(existing.value as () => void);
+        }
+
+        created.push(() => dispose());
 
         Object.defineProperty(raw, Symbol.dispose, {
           value: () => {

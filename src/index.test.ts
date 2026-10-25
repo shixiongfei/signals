@@ -11,7 +11,7 @@
 
 import assert from "node:assert";
 import { describe, test } from "node:test";
-import signals, { type ReadonlySignal } from "./index.ts";
+import signals, { type EffectScope, type ReadonlySignal } from "./index.ts";
 
 describe("Signals Unit Test", () => {
   test("test signal", () => {
@@ -2481,6 +2481,35 @@ describe("Reactive toRaw Unit Test", () => {
     assert.strictEqual(plain.polluted, undefined);
     assert.strictEqual(({} as any).polluted, undefined);
   });
+
+  test("toRawDeep should keep symbol keys, non-enumerable props and accessors", () => {
+    const tag = Symbol("tag");
+    const raw: any = { n: 2, [tag]: { deep: 1 } };
+
+    Object.defineProperty(raw, "hidden", { value: 3, enumerable: false });
+    Object.defineProperty(raw, "double", {
+      get(this: any) {
+        return this.n * 2;
+      },
+      enumerable: true,
+      configurable: true,
+    });
+
+    const plain: any = signals.toRawDeep(signals.reactive(raw));
+
+    assert.deepStrictEqual(plain[tag], { deep: 1 });
+    assert.notStrictEqual(plain[tag], raw[tag]);
+    assert.strictEqual((plain as any).hidden, 3);
+    assert.strictEqual(
+      Object.getOwnPropertyDescriptor(plain, "hidden")!.enumerable,
+      false,
+    );
+    assert.strictEqual(
+      typeof Object.getOwnPropertyDescriptor(plain, "double")!.get,
+      "function",
+    );
+    assert.strictEqual((plain as any).double, 4);
+  });
 });
 
 describe("Reactive defineProperty / accessor delete / class", () => {
@@ -2628,6 +2657,23 @@ describe("Reactive defineProperty / accessor delete / class", () => {
 
     assert.strictEqual(raw.other, child);
     assert.strictEqual(observed.other, observed.child);
+  });
+
+  test("defineProperty on brand symbol should not corrupt reactive identity", () => {
+    const raw: any = { count: 0 };
+    const proxy = signals.reactive(raw);
+    const brand = Symbol.for("SHIXIONGFEI-SIGNALS");
+
+    assert.strictEqual(
+      Object.defineProperty(proxy, brand, { value: "x" }),
+      proxy,
+    );
+    assert.strictEqual(raw[brand], undefined);
+    assert.strictEqual(signals.reactive(raw), proxy);
+    assert.strictEqual(
+      Object.getOwnPropertyDescriptor(proxy, brand),
+      undefined,
+    );
   });
 
   test("defineProperty on non-configurable property should throw", () => {
@@ -3202,9 +3248,42 @@ describe("Store Unit Test", () => {
     s[Symbol.dispose]();
   });
 
+  test("test store accessor property", () => {
+    const output: number[] = [];
+    const count = signals.signal(0);
+
+    const s = signals.store(() => ({
+      get count() {
+        return count();
+      },
+
+      inc() {
+        count(count() + 1);
+      },
+    }));
+
+    assert.strictEqual(
+      Object.getOwnPropertyDescriptor(s, "count")!.get !== undefined,
+      true,
+    );
+    assert.strictEqual(s.count, 0);
+    assert.strictEqual(signals.isAction(s.inc), true);
+
+    const dispose = signals.effect(() => {
+      output.push(s.count);
+    });
+
+    s.inc();
+    s.inc();
+    assert.deepStrictEqual(output, [0, 1, 2]);
+
+    dispose();
+    s[Symbol.dispose]();
+  });
+
   test("test store existing action and branded functions", () => {
     const existing = signals.action(() => 1);
-    let effectDispose: unknown;
+    let effectDispose: EffectScope | undefined;
 
     const s = signals.store(() => {
       const count = signals.signal(0);
@@ -3402,6 +3481,35 @@ describe("Store Unit Test", () => {
     const nested = signals.store(() => ({ inner: { fn() {} } }));
     assert.strictEqual(Symbol.dispose in nested.inner, false);
     nested[Symbol.dispose]();
+  });
+
+  test("test store preserves existing Symbol.dispose", () => {
+    let calls = 0;
+
+    const s = signals.store(() => ({
+      [Symbol.dispose]() {
+        calls++;
+      },
+    }));
+
+    s[Symbol.dispose]();
+    assert.strictEqual(calls, 1);
+
+    // Repeated dispose must not call the user disposer again.
+    s[Symbol.dispose]();
+    assert.strictEqual(calls, 1);
+
+    const locked: Record<PropertyKey, unknown> = {};
+
+    Object.defineProperty(locked, Symbol.dispose, {
+      value() {},
+      configurable: false,
+    });
+
+    assert.throws(
+      () => signals.store(() => locked),
+      /non-configurable Symbol\.dispose/,
+    );
   });
 
   test("test store using", () => {

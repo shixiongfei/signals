@@ -23,6 +23,20 @@ const ITERATE = Symbol("ITERATE");
 const NOTIFY = Symbol("NOTIFY");
 
 const proxyMap = new WeakMap<object, object>();
+const frozenSet = new WeakSet<object>();
+
+const isFrozen = (value: object) => {
+  if (frozenSet.has(value)) {
+    return true;
+  }
+
+  if (Object.isExtensible(value) || !Object.isFrozen(value)) {
+    return false;
+  }
+
+  frozenSet.add(value);
+  return true;
+};
 
 const arrayMutations = new Set<PropertyKey>([
   "push",
@@ -54,7 +68,6 @@ const isBuiltInSymbol = (key: PropertyKey) =>
 const isProxiable = (value: unknown) =>
   isObject(value) &&
   (Array.isArray(value) || isPlainObject(value)) &&
-  !Object.isFrozen(value) &&
   (value as any)[BRAND_SYMBOL] === undefined;
 
 const isBrandSymbol = (key: PropertyKey) =>
@@ -89,7 +102,7 @@ export const isReactive = (value: unknown) =>
   isObject(value) && (value as any)[BRAND_SYMBOL] === "reactive";
 
 export function reactive<T>(target: T): T {
-  if (!isObject(target) || Object.isFrozen(target)) {
+  if (!isObject(target) || isFrozen(target)) {
     return target;
   }
 
@@ -399,6 +412,10 @@ export function reactive<T>(target: T): T {
     },
 
     getOwnPropertyDescriptor(obj, key) {
+      if (isBrandSymbol(key)) {
+        return undefined;
+      }
+
       if (!writing && !isBuiltInSymbol(key)) {
         if (tracking()) {
           getSignal(ITERATE)();
@@ -408,6 +425,10 @@ export function reactive<T>(target: T): T {
     },
 
     defineProperty(obj, key, desc) {
+      if (isBrandSymbol(key)) {
+        return true;
+      }
+
       if (writing || isBuiltInSymbol(key)) {
         return Reflect.defineProperty(obj, key, desc);
       }
@@ -499,13 +520,19 @@ function _toRawDeep<T>(value: T, seen: WeakMap<object, unknown>): T {
 
   seen.set(raw, out);
 
-  for (const key of Object.keys(raw)) {
-    Object.defineProperty(out, key, {
-      value: _toRawDeep((raw as any)[key], seen),
-      writable: true,
-      enumerable: true,
-      configurable: true,
-    });
+  for (const key of Reflect.ownKeys(raw)) {
+    if (Array.isArray(raw) && key === "length") {
+      continue;
+    }
+
+    const desc = Object.getOwnPropertyDescriptor(raw, key)!;
+    const clone = { ...desc };
+
+    if ("value" in desc) {
+      clone.value = _toRawDeep(desc.value, seen);
+    }
+
+    Object.defineProperty(out, key, clone);
   }
 
   if (Array.isArray(raw)) {
