@@ -3410,6 +3410,36 @@ describe("Store Unit Test", () => {
     s[Symbol.dispose]();
   });
 
+  test("test store symbol key typing", () => {
+    type EQ<A, B> =
+      (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+        ? true
+        : false;
+
+    const fnSym = Symbol("fn");
+    const objSym = Symbol("obj");
+
+    const fn = (): number => 1;
+    const nestedFn = (): number => 2;
+
+    const s = signals.store(() => ({
+      [fnSym]: fn,
+      [objSym]: { fn: nestedFn },
+      count: 0,
+    }));
+
+    const rawFn: EQ<(typeof s)[typeof fnSym], () => number> = true;
+    const rawNested: EQ<(typeof s)[typeof objSym]["fn"], () => number> = true;
+
+    assert.strictEqual(rawFn, true);
+    assert.strictEqual(rawNested, true);
+    assert.strictEqual(s[fnSym](), 1);
+    assert.strictEqual(signals.isAction(s[fnSym]), false);
+    assert.strictEqual(signals.isAction(s[objSym].fn), false);
+
+    s[Symbol.dispose]();
+  });
+
   test("test store property descriptors", () => {
     let getterCalls = 0;
     const fn = () => 1;

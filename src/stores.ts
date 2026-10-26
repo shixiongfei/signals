@@ -15,18 +15,12 @@ import { toRaw } from "./reactivity.ts";
 import type { Action, Effect, EffectScope, ReadonlySignal } from "./signals.ts";
 
 export type Store<T> = {
-  [K in keyof T]: T[K] extends ReadonlySignal<any> | Effect | EffectScope
+  [K in keyof T]: K extends symbol
     ? T[K]
-    : T[K] extends (...args: infer A) => infer R
-      ? Action<A, R>
-      : T[K] extends
-            | Date
-            | Map<any, any>
-            | Set<any>
-            | WeakMap<any, any>
-            | WeakSet<any>
-            | readonly any[]
-        ? T[K]
+    : T[K] extends ReadonlySignal<any> | Effect | EffectScope
+      ? T[K]
+      : T[K] extends (...args: infer A) => infer R
+        ? Action<A, R>
         : T[K] extends Record<string, unknown>
           ? Store<T[K]>
           : T[K];
