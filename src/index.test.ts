@@ -11,7 +11,16 @@
 
 import assert from "node:assert";
 import { describe, test } from "node:test";
-import signals, { type EffectScope, type ReadonlySignal } from "./index.ts";
+import signals, {
+  type Action,
+  type EffectScope,
+  type ReadonlySignal,
+} from "./index.ts";
+
+type EQ<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? true
+    : false;
 
 describe("Signals Unit Test", () => {
   test("test signal", () => {
@@ -3411,11 +3420,6 @@ describe("Store Unit Test", () => {
   });
 
   test("test store symbol key typing", () => {
-    type EQ<A, B> =
-      (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
-        ? true
-        : false;
-
     const fnSym = Symbol("fn");
     const objSym = Symbol("obj");
 
@@ -3438,6 +3442,57 @@ describe("Store Unit Test", () => {
     assert.strictEqual(signals.isAction(s[objSym].fn), false);
 
     s[Symbol.dispose]();
+  });
+
+  test("test store under-advertised action typing", () => {
+    interface State {
+      count: number;
+      inc(): number;
+    }
+
+    const optional = signals.store(() => ({
+      fn: (() => 1) as (() => number) | undefined,
+    }));
+
+    const sig = signals.signal(0);
+
+    const optionalSignal = signals.store(() => ({
+      sig: sig as ReadonlySignal<number> | undefined,
+    }));
+
+    const state = signals.store(
+      (): State => ({
+        count: 0,
+        inc() {
+          return ++this.count;
+        },
+      }),
+    );
+
+    const optionalTyped: EQ<
+      typeof optional.fn,
+      Action<[], number> | undefined
+    > = true;
+
+    const optionalSignalTyped: EQ<
+      typeof optionalSignal.sig,
+      ReadonlySignal<number> | undefined
+    > = true;
+
+    const stateTyped: EQ<typeof state.inc, Action<[], number>> = false;
+
+    assert.strictEqual(optionalTyped, true);
+    assert.strictEqual(optionalSignalTyped, true);
+    assert.strictEqual(stateTyped, false);
+
+    assert.strictEqual(signals.isAction(optional.fn), true);
+    assert.strictEqual(signals.isAction(optionalSignal.sig), false);
+    assert.strictEqual(signals.isAction(state.inc), true);
+    assert.strictEqual(state.inc(), 1);
+
+    optional[Symbol.dispose]();
+    optionalSignal[Symbol.dispose]();
+    state[Symbol.dispose]();
   });
 
   test("test store property descriptors", () => {

@@ -17,16 +17,19 @@ import type { Action, Effect, EffectScope, ReadonlySignal } from "./signals.ts";
 export type Store<T> = {
   [K in keyof T]: K extends symbol
     ? T[K]
-    : T[K] extends ReadonlySignal<any> | Effect | EffectScope
-      ? T[K]
-      : T[K] extends (...args: infer A) => infer R
-        ? Action<A, R>
-        : T[K] extends Record<string, unknown>
-          ? Store<T[K]>
-          : T[K];
+    : T[K] extends infer V
+      ? V extends ReadonlySignal<any> | Effect | EffectScope
+        ? V
+        : V extends (...args: infer A) => infer R
+          ? Action<A, R>
+          : V extends Record<string, unknown>
+            ? Stored<V>
+            : V
+      : never;
 };
 
-type Stored<T> = T extends Record<string, unknown> ? Store<T> : T;
+type Stored<T> =
+  T extends Record<string, unknown> ? { [K in keyof T]: Store<T>[K] } : T;
 
 const disposeMap = new WeakMap<object, Array<() => void>>();
 
