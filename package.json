@@ -18,8 +18,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "tsc && node ./dist/index.test.js",
-    "coverage": "node --test --experimental-test-coverage"
+    "test": "node ./src/index.test.ts",
+    "coverage": "node --test --experimental-test-coverage ./src"
   },
   "repository": {
     "type": "git",
